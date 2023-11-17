@@ -212,4 +212,4 @@ async def on_startup():
     asyncio.create_task(start_health_check_coroutines())
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=5683, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=5683)
