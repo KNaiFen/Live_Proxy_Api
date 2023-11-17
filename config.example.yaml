@@ -1,21 +1,17 @@
 INTERFACE_POOLS:
   OV:
     INTERFACE_POOL:
-      - url: https://12311.bilibili.api
+    # 反代节点
+      - url: https://api.live.bilibili.com
+        # 权重
         weight: 1
-      - url: https://123125.123123.api
-        weight: 3
-      - url: http://123.123.123.123:23456
-        weight: 1
+        # (可选)最大重试次数，默认为2次
+        max_retries: 2
+        # (可选) 重试间隔时间（秒），默认为10秒
+        retry_interval: 10
   CN:
     INTERFACE_POOL:
-      - url: https://12311.bilibili.api
-        weight: 1
-      - url: https://123125.123123.api
-        weight: 3
-      - url: https://cnexample.test.com
-        weight: 1
-      - url: http://234.234.234.234:34567
+      - url: https://api.live.bilibili.com
         weight: 1
 
 COOKIESTR_POOL:

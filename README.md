@@ -12,4 +12,10 @@ BILIBILI的直播API中间层，反代并负载均衡直播流API与Cookie
 ## 使用
 1. config.yaml中填写你所使用的直播流反代API和你的Cookie
 2. 启动脚本 `py Api.py`
-3. 把你所使用的录播软件的直播流API改为 `http://localhost:5683/api_live_stream/{代理池名称}`
+3. 把所使用的录播软件的直播流API看需求改为下列地址
+```
+# 使用Cookie
+`http://localhost:5683/api_live/use_cookie/{代理池名称}`
+# 不使用Cookie
+`http://localhost:5683/api_live/no_cookie/{代理池名称}`
+```

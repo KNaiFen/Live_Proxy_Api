@@ -47,19 +47,26 @@ log.addHandler(stream_handler)
 
 
 # 配置文件
-with open(os.path.join(root_directory, 'config.yaml'), 'r') as file:
+with open(os.path.join(root_directory, 'config.yaml'), 'r', encoding='utf-8') as file:
     config = yaml.safe_load(file)
+
 INTERFACE_POOLS = config['INTERFACE_POOLS']
 ORIGINAL_COOKIESTR_POOL = list(set(config['COOKIESTR_POOL']))
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
 
+# 接口检查请求参数的默认值
+DEFAULT_MAX_RETRIES = config.get('DEFAULT_MAX_RETRIES', 2)
+DEFAULT_RETRY_INTERVAL = config.get('DEFAULT_RETRY_INTERVAL', 10)
+
+
 app = FastAPI()
 
 # 异步 接口检查请求
-async def check_interface_health_async(url: str) -> bool:
+async def check_interface_health_async(url: str, max_retries: int = 2, retry_interval: int = 10) -> bool:
     request_url = f"{url}/room/v1/Room/playUrl?cid=3&qn=10000&platform=web"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-    for _ in range(2):
+    
+    for _ in range(max_retries):
         try:
             with httpx.Client() as client:
                 response = client.get(request_url, headers=headers)
@@ -67,7 +74,8 @@ async def check_interface_health_async(url: str) -> bool:
                 return True
         except httpx.HTTPError:
             pass
-        await asyncio.sleep(10)
+        await asyncio.sleep(retry_interval)
+    
     return False
 
 # 异步 Cookie健康检查
@@ -98,9 +106,11 @@ async def interface_health_check_task():
         interface_health_status[pool_name] = {url['url']: {"success_count": 0, "is_healthy": True} for url in pool['INTERFACE_POOL']}
     
     while True:
-        all_check_tasks = [(pool_name, url['url'], check_interface_health_async(url['url'])) 
-                           for pool_name, pool in INTERFACE_POOLS.items()
-                           for url in pool['INTERFACE_POOL']]
+        all_check_tasks = [
+            (pool_name, url['url'], check_interface_health_async(url['url'], pool.get('max_retries', DEFAULT_MAX_RETRIES), pool.get('retry_interval', DEFAULT_RETRY_INTERVAL))) 
+            for pool_name, pool in INTERFACE_POOLS.items()
+            for url in pool['INTERFACE_POOL']
+        ]
         check_results = await asyncio.gather(*[task for _, _, task in all_check_tasks])
 
         for (pool_name, url, _), result in zip(all_check_tasks, check_results):
