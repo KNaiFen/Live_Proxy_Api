@@ -51,8 +51,9 @@ with open(os.path.join(root_directory, 'config.yaml'), 'r', encoding='utf-8') as
     config = yaml.safe_load(file)
 
 INTERFACE_POOLS = config['INTERFACE_POOLS']
-ORIGINAL_COOKIESTR_POOL = list(set(config['COOKIESTR_POOL']))
+ORIGINAL_COOKIESTR_POOL = config['COOKIESTR_POOL']
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
+HEALTH_COOKIESTR_POOL = []
 
 # 接口检查请求参数
 DEFAULT_MAX_RETRIES = config.get('DEFAULT_MAX_RETRIES', 2)
@@ -132,9 +133,10 @@ async def interface_health_check_task():
 
 # 异步 执行Cookie的健康检查并管理
 async def cookie_health_check_task():
+    global HEALTH_COOKIESTR_POOL
     while True:
-        healthy_cookiestr_pool = [cookie for cookie in ORIGINAL_COOKIESTR_POOL if await check_cookie_health_async(cookie)]
-        log.info(f"当前健康 Cookie 数: {len(healthy_cookiestr_pool)}")
+        HEALTH_COOKIESTR_POOL = [cookie['cookie'] for cookie in ORIGINAL_COOKIESTR_POOL if await check_cookie_health_async(cookie['cookie'])]
+        log.info(f"当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}")
         await asyncio.sleep(12 * 3600)
 
 # 启动健康检查协程
@@ -170,7 +172,7 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
     pool = INTERFACE_POOLS[pool_name]['INTERFACE_POOL']
     weighted_urls = [(url['url'], url['weight']) for url in pool if url['url'] in HEALTH_INTERFACE_POOLS[pool_name]]
     target_url = weighted_choice(weighted_urls) if weighted_urls else None
-    chosen_cookie = random.choice(ORIGINAL_COOKIESTR_POOL) if ORIGINAL_COOKIESTR_POOL else None
+    # chosen_cookie = random.choice(HEALTH_COOKIESTR_POOL) if HEALTH_COOKIESTR_POOL else None
 
     if not target_url:
         log.warning("没有可用的健康接口")
@@ -182,6 +184,9 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
     body = await request.body()
 
     if use_cookie:
+        weighted_healthy_cookies = [(cookie, weight) for cookie, weight in [(c['cookie'], c['weight']) for c in ORIGINAL_COOKIESTR_POOL] if cookie in HEALTH_COOKIESTR_POOL]
+        chosen_cookie = weighted_choice(weighted_healthy_cookies) if weighted_healthy_cookies else None
+        # log.info(f"选择Cookie: {chosen_cookie}")
         if chosen_cookie:
             headers.pop('cookie', None)
             headers.pop('host', None)
