@@ -1,7 +1,0 @@
-INTERFACE_POOL:
-  - https://12311.bilibili.api
-  - https://123123.bilibili.api
-  - https://123125.123123.api
-COOKIESTR_POOL:
-  - DedeUserID=121323;DedeUserID__ckMd5=124;Expires=123;SESSDATA=123123123;bili_jct=1234124;LIVE_BUVID=1241353
-  - DedeUserID=121321233;DedeUserID__ckMd5=1244;Exp123ires=123123;SESSDATA=123123123;bili_jct=123412124;LIVE_BUVID=1241135

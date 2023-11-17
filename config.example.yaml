@@ -1,0 +1,24 @@
+INTERFACE_POOLS:
+  OV:
+    INTERFACE_POOL:
+      - url: https://12311.bilibili.api
+        weight: 1
+      - url: https://123125.123123.api
+        weight: 3
+      - url: http://123.123.123.123:23456
+        weight: 1
+  CN:
+    INTERFACE_POOL:
+      - url: https://12311.bilibili.api
+        weight: 1
+      - url: https://123125.123123.api
+        weight: 3
+      - url: https://cnexample.test.com
+        weight: 1
+      - url: http://234.234.234.234:34567
+        weight: 1
+
+COOKIESTR_POOL:
+  - DedeUserID=121323;DedeUserID__ckMd5=124;Expires=123;SESSDATA=123123123;bili_jct=1234124;LIVE_BUVID=1241353
+  - DedeUserID=121321233;DedeUserID__ckMd5=1244;Exp123ires=123123;SESSDATA=123123123;bili_jct=123412124;LIVE_BUVID=1241135
+  - DedeUserID=d1;DedeUserID__ckMd5=13f32;Exp123ires=12d;SESSDATA=asr2;bili_jct=123412124;LIVE_BUVID=123
