@@ -1,2 +1,5 @@
 config.yaml
 Api.py.bak
+Api.bak.py
+.gitignore
+logs/LB.log
