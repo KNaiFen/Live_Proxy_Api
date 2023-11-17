@@ -1,13 +1,16 @@
+# (可选)节点健康检查间隔(秒)，默认180秒
+INTERFACE_HEALTH_CHECK_INTERVAL: 180
+
 INTERFACE_POOLS:
   OV:
     INTERFACE_POOL:
-    # 节点
+      # 节点
       - url: http(s)://example.com
         # 权重
         weight: 1
-        # (可选)最大重试次数，默认为2次
+        # (可选)最大重试次数，默认2次
         max_retries: 2
-        # (可选) 重试间隔时间(秒)，默认为10秒
+        # (可选)重试间隔时间(秒)，默认10秒
         retry_interval: 10
       - url: http://114.51.41.91:9810
         weight: 1
@@ -17,6 +20,5 @@ INTERFACE_POOLS:
         weight: 1
 
 COOKIESTR_POOL:
-  - DedeUserID=121323;DedeUserID__ckMd5=124;Expires=123;SESSDATA=123123123;bili_jct=1234124;LIVE_BUVID=1241353
-  - DedeUserID=121321233;DedeUserID__ckMd5=1244;Exp123ires=123123;SESSDATA=123123123;bili_jct=123412124;LIVE_BUVID=1241135
-  - DedeUserID=d1;DedeUserID__ckMd5=13f32;Exp123ires=12d;SESSDATA=asr2;bili_jct=123412124;LIVE_BUVID=123
+  - DedeUserID=114514;DedeUserID__ckMd5=114514;Expires=114514;SESSDATA=114514;bili_jct=114514;LIVE_BUVID=114514
+  - DedeUserID=1919810;DedeUserID__ckMd5=1919810;Exp123ires=1919810;SESSDATA=1919810;bili_jct=1919810;LIVE_BUVID=1919810

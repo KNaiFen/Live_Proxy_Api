@@ -54,10 +54,12 @@ INTERFACE_POOLS = config['INTERFACE_POOLS']
 ORIGINAL_COOKIESTR_POOL = list(set(config['COOKIESTR_POOL']))
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
 
-# 接口检查请求参数与默认值
+# 接口检查请求参数
 DEFAULT_MAX_RETRIES = config.get('DEFAULT_MAX_RETRIES', 2)
 DEFAULT_RETRY_INTERVAL = config.get('DEFAULT_RETRY_INTERVAL', 10)
 
+# 健康检查的频率
+INTERFACE_HEALTH_CHECK_INTERVAL = config.get('INTERFACE_HEALTH_CHECK_INTERVAL', 180)
 
 app = FastAPI()
 
@@ -104,10 +106,10 @@ async def interface_health_check_task():
     interface_health_status = {}
     for pool_name, pool in INTERFACE_POOLS.items():
         interface_health_status[pool_name] = {url['url']: {"success_count": 0, "is_healthy": True} for url in pool['INTERFACE_POOL']}
-        
+    
     while True:
         all_check_tasks = [
-            (pool_name, url['url'], check_interface_health_async(url['url'], pool['max_retries'], pool['retry_interval'])) 
+            (pool_name, url['url'], check_interface_health_async(url['url'], pool.get('max_retries', DEFAULT_MAX_RETRIES), pool.get('retry_interval', DEFAULT_RETRY_INTERVAL))) 
             for pool_name, pool in INTERFACE_POOLS.items()
             for url in pool['INTERFACE_POOL']
         ]
@@ -125,7 +127,8 @@ async def interface_health_check_task():
             HEALTH_INTERFACE_POOLS[pool_name] = [url for url, status in interface_health_status[pool_name].items() if status["is_healthy"]]
 
         log.info("当前健康接口数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()))
-        await asyncio.sleep(180)
+        
+        await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
 
 # 异步 执行Cookie的健康检查并管理
 async def cookie_health_check_task():
