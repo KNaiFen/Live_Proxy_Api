@@ -5,7 +5,7 @@ BILIBILI的直播API中间层，反代并负载均衡直播流API与Cookie
  - 多个代理池
  - 根据权重随机选择代理池内的一个反代API使用
  - 代理的健康检查功能
- - cookie池，随机选择cookie使用
+ - cookie池，根据权重随机选择cookie使用
  - cookie的健康检查功能
 
 
