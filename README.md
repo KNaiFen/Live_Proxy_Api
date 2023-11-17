@@ -15,7 +15,7 @@ BILIBILI的直播API中间层，反代并负载均衡直播流API与Cookie
 3. 把所使用的录播软件的直播流API看需求改为下列地址
 ```
 # 使用Cookie
-`http://localhost:5683/api_live/use_cookie/{代理池名称}`
+http://localhost:5683/api_live/use_cookie/{代理池名称}
 # 不使用Cookie
-`http://localhost:5683/api_live/no_cookie/{代理池名称}`
+http://localhost:5683/api_live/no_cookie/{代理池名称}
 ```
