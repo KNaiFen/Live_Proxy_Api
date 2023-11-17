@@ -7,7 +7,7 @@ INTERFACE_POOLS:
         weight: 1
         # (可选)最大重试次数，默认为2次
         max_retries: 2
-        # (可选) 重试间隔时间（秒），默认为10秒
+        # (可选) 重试间隔时间(秒)，默认为10秒
         retry_interval: 10
       - url: http://114.51.41.91:9810
         weight: 1
