@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException
+from datetime import datetime, timedelta
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 import logging
@@ -12,11 +13,12 @@ import asyncio
 import json
 import yaml
 
-# 路径
+# 根路径
 root_directory = os.path.dirname(os.path.abspath(__file__))
 
+SECRET_KEY = "YourSecretKey"  # 需要加密的接口的认证密匙
 
-## 日志部分
+### 日志部分
 # 创建目录
 logs_directory = os.path.join(root_directory, 'logs')
 Path(logs_directory).mkdir(parents=True, exist_ok=True)
@@ -46,6 +48,8 @@ log.setLevel(logging.INFO)
 log.addHandler(stream_handler)
 
 
+
+### 负载均衡API实现
 # 配置文件
 with open(os.path.join(root_directory, 'config.yaml'), 'r', encoding='utf-8') as file:
     config = yaml.safe_load(file)
@@ -61,21 +65,25 @@ DEFAULT_RETRY_INTERVAL = config.get('DEFAULT_RETRY_INTERVAL', 10)
 
 # 健康检查的频率
 INTERFACE_HEALTH_CHECK_INTERVAL = config.get('INTERFACE_HEALTH_CHECK_INTERVAL', 180)
+COOKIE_HEALTH_CHECK_INTERVAL = config.get('INTERFACE_HEALTH_CHECK_INTERVAL', 1 * 3600)
 
 app = FastAPI()
 
 # 异步 接口检查请求
 async def check_interface_health_async(url: str, max_retries: int = DEFAULT_MAX_RETRIES, retry_interval: int = DEFAULT_RETRY_INTERVAL) -> bool:
+    global INTERFACE_HEALTH_DATA
     request_url = f"{url}/room/v1/Room/playUrl?cid=3&qn=10000&platform=web"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-    
     for _ in range(max_retries):
         try:
-            with httpx.Client() as client:
-                response = client.get(request_url, headers=headers)
+            INTERFACE_HEALTH_DATA[url]['total'] += 1
+            async with httpx.AsyncClient() as client:
+                response = await client.get(request_url, headers=headers, timeout=5)
             if response.status_code >= 200 and response.status_code < 300:
+                INTERFACE_HEALTH_DATA[url]['total_success'] += 1
                 return True
-        except httpx.HTTPError:
+        except httpx.HTTPError as http_err:
+            # log.error(f"Error: check_interface_health_async: {url}")
             pass
         await asyncio.sleep(retry_interval)
     
@@ -99,6 +107,7 @@ async def check_cookie_health_async(cookie: str) -> bool:
     is_logged_in, _, _, _ = is_login(cookie)
     if is_logged_in:
         return True
+    log.error(f"此Cookie无效了: {cookie}")
     return False
 
 # 异步 接口健康检查
@@ -137,7 +146,7 @@ async def cookie_health_check_task():
     while True:
         HEALTH_COOKIESTR_POOL = [cookie['cookie'] for cookie in ORIGINAL_COOKIESTR_POOL if await check_cookie_health_async(cookie['cookie'])]
         log.info(f"当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}")
-        await asyncio.sleep(12 * 3600)
+        await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
 
 # 启动健康检查协程
 async def start_health_check_coroutines():
@@ -168,6 +177,8 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
 
     if pool_name not in HEALTH_INTERFACE_POOLS:
         raise HTTPException(status_code=404, detail="Pool not found")
+    
+    update_request_stats(pool_name)
 
     pool = INTERFACE_POOLS[pool_name]['INTERFACE_POOL']
     weighted_urls = [(url['url'], url['weight']) for url in pool if url['url'] in HEALTH_INTERFACE_POOLS[pool_name]]
@@ -224,10 +235,85 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
 def liveStreamProcess(date_json):
     return date_json
 
+
+
+### 监控相关
+# 初始化 request_data
+REQUEST_DATA = {pool_name: {"total_requests": 0, "recent_requests": 0, "recent_requests_timestamps": [], "creation_time": datetime.now()} for pool_name in config['INTERFACE_POOLS']}
+
+# 初始化接口健康数据
+INTERFACE_HEALTH_DATA = {item['url']: {"total": 0, "total_success": 0} for pool in config['INTERFACE_POOLS'].values() for item in pool['INTERFACE_POOL']}
+
+# 清理 request_data 旧数据
+async def cleanup_old_stats():
+    while True:
+        ten_minutes_ago = datetime.now() - timedelta(minutes=10)
+        for data in REQUEST_DATA.values():
+            data["recent_requests_timestamps"] = [t for t in data["recent_requests_timestamps"] if t > ten_minutes_ago]
+            recent_count = len(data["recent_requests_timestamps"]) * 10
+            data["recent_requests"] = recent_count + data["recent_requests"] % 10
+        await asyncio.sleep(60)
+
+# 更新 request_data 请求数据
+def update_request_stats(pool_name):
+    now = datetime.now()
+    data = REQUEST_DATA[pool_name]
+    data["total_requests"] += 1
+    data["recent_requests"] += 1
+
+    if data["recent_requests"] % 10 == 0:
+        data["recent_requests_timestamps"].append(now)
+
+# 返回各个接口池的调用次数和总调用次数
+@app.get("/api_status/request_pools_count")
+async def request_pools_count():
+    # request_data 总体频率计算
+    def calculate_total_frequency(pool_name):
+        data = REQUEST_DATA[pool_name]
+        duration = datetime.now() - data["creation_time"]
+        total_frequency = data["total_requests"] / (duration.total_seconds() / 60)  # 每分钟请求次数
+        return total_frequency
+    
+    pools_data = []
+    for pool_name, data in REQUEST_DATA.items():
+        total_frequency = calculate_total_frequency(pool_name)
+        pool_stats = {
+            pool_name: {
+                "total_requests": data["total_requests"],
+                "recent_requests": data["recent_requests"],
+                "total_frequency_per_minute": total_frequency
+            }
+        }
+        pools_data.append(pool_stats)
+    return pools_data
+
+# 健康率接口
+@app.get("/api_status/request_health_data")
+async def health_count(request: Request):
+    auth_key = request.headers.get("Authorization")
+    if auth_key != SECRET_KEY:
+        raise HTTPException(status_code=404, detail="Unauthorized")
+
+    health_data = []
+    for url, data in INTERFACE_HEALTH_DATA.items():
+        health_rate = (data["total_success"] / data["total"]) if data["total"] > 0 else 0
+        health_data.append({url: {"health_rate": health_rate, "total": data["total"]}})
+    return health_data
+
+# 当前健康情况
+@app.get("/api_status/health_status_number")
+async def health_status_number():
+    request_status = {pool: len(urls) for pool, urls in HEALTH_INTERFACE_POOLS.items()}
+    return {'request_status': request_status, 'cookie_status': len(HEALTH_COOKIESTR_POOL)}
+
+
+
+### 主线程启动
 # 启动时事件处理
 @app.on_event("startup")
 async def on_startup():
-    asyncio.create_task(start_health_check_coroutines())
+    asyncio.create_task(start_health_check_coroutines())    # 健康检查
+    asyncio.create_task(cleanup_old_stats())                # 接口数据清理
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=5683)

@@ -1,6 +1,9 @@
 # (可选)全局节点健康检查间隔(秒)，默认180秒
 INTERFACE_HEALTH_CHECK_INTERVAL: 180
 
+# (可选)Cookie健康检查间隔(秒)，默认3600秒
+COOKIE_HEALTH_CHECK_INTERVAL: 3600
+
 # (可选)全局节点最大重试次数，默认2次
 DEFAULT_MAX_RETRIES: 2
 
