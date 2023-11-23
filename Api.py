@@ -264,7 +264,7 @@ def update_request_stats(pool_name):
     if data["recent_requests"] % 10 == 0:
         data["recent_requests_timestamps"].append(now)
 
-# 返回各个接口池的调用次数和总调用次数
+# 返回各个 反代API池 的调用次数和总调用次数
 @app.get("/api_status/request_pools_count")
 async def request_pools_count():
     # request_data 总体频率计算
@@ -289,7 +289,7 @@ async def request_pools_count():
 
 # 查询各个 反代API 健康率
 @app.get("/api_status/request_health_data")
-async def health_count(request: Request):
+async def request_health_count(request: Request):
     auth_key = request.headers.get("Authorization")
     if auth_key != SECRET_KEY:
         raise HTTPException(status_code=404, detail="Unauthorized")
@@ -302,7 +302,7 @@ async def health_count(request: Request):
 
 # 查询各个 Cookie 健康情况
 @app.get("/api_status/cookie_health_data")
-async def health_count(request: Request):
+async def cookie_health_count(request: Request):
     auth_key = request.headers.get("Authorization")
     if auth_key != SECRET_KEY:
         raise HTTPException(status_code=404, detail="Unauthorized")
