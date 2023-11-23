@@ -272,7 +272,7 @@ async def request_pools_count():
         data = REQUEST_DATA[pool_name]
         duration = datetime.now() - data["creation_time"]
         total_frequency = data["total_requests"] / (duration.total_seconds() / 60)  # 每分钟请求次数
-        return total_frequency
+        return round(total_frequency, 1)
     
     pools_data = []
     for pool_name, data in REQUEST_DATA.items():
@@ -285,9 +285,9 @@ async def request_pools_count():
             }
         }
         pools_data.append(pool_stats)
-    return pools_data
+    return {'pools_data': pools_data}
 
-# 健康率接口
+# 查询各个 反代API 健康率
 @app.get("/api_status/request_health_data")
 async def health_count(request: Request):
     auth_key = request.headers.get("Authorization")
@@ -298,9 +298,26 @@ async def health_count(request: Request):
     for url, data in INTERFACE_HEALTH_DATA.items():
         health_rate = (data["total_success"] / data["total"]) if data["total"] > 0 else 0
         health_data.append({url: {"health_rate": health_rate, "total": data["total"]}})
-    return health_data
+    return {'health_data': health_data}
 
-# 当前健康情况
+# 查询各个 Cookie 健康情况
+@app.get("/api_status/cookie_health_data")
+async def health_count(request: Request):
+    auth_key = request.headers.get("Authorization")
+    if auth_key != SECRET_KEY:
+        raise HTTPException(status_code=404, detail="Unauthorized")
+
+    health_cookie = []
+    no_health_cookie = []
+    for cookie in ORIGINAL_COOKIESTR_POOL:
+        try:
+            if cookie['cookie'] in HEALTH_COOKIESTR_POOL: health_cookie.append(cookie['cookie'])
+            else: no_health_cookie.append(cookie['cookie'])
+        except Exception as Error:
+            log.error(f'health_count: Error: {Error}')
+    return {'health_cookie': health_cookie, 'no_health_cookie': no_health_cookie}
+
+# 当前总体健康情况
 @app.get("/api_status/health_status_number")
 async def health_status_number():
     request_status = {pool: len(urls) for pool, urls in HEALTH_INTERFACE_POOLS.items()}
