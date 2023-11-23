@@ -33,7 +33,7 @@ def query_request_health_count(url):
             for api_url, stats in entry.items():
                 health_rate = stats['health_rate'] * 100
                 total_requests = stats['total']
-                print(f"{api_url:35} | 健康率: {health_rate:5.1f}% | 请求总数: {total_requests}")
+                print(f"{api_url:35} | 健康率: {health_rate:5.1f}% | 检查次数: {total_requests}")
 
 # 查询各个 反代API 健康率
 def query_cookie_health_count(url):
@@ -45,10 +45,10 @@ def query_cookie_health_count(url):
         health_cookies = data.get('health_cookie', [])
         no_health_cookies = data.get('no_health_cookie', [])
 
-        print("健康的Cookie: ")
+        print(f"健康Cookie数量: {len(health_cookies)}: ")
         for health_cookie in health_cookies:
             print(health_cookie)
-        print("\n不健康的Cookie: ")
+        print(f"\n不健康Cookie数量: {len(no_health_cookies)}: ")
         for no_health_cookie in no_health_cookies:
             print(no_health_cookie)
         print()
@@ -65,7 +65,7 @@ def query_health_status_number(url):
         print("当前各接口池的健康接口数量：")
         for pool_name, healthy_count in request_status.items():
             print(f"{pool_name:7}: {healthy_count}")
-        print("\n当前健康Cookie数量：", cookie_status)
+        print("当前健康Cookie数量：", cookie_status)
 
 
 if __name__ == "__main__":
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     INPUT = ''
     while(INPUT != '99'):
         INPUT = input("输入选项：")
+        print()
         if INPUT == '1':
             query_request_pools_count(URL)
         elif INPUT == '2':
@@ -88,6 +89,7 @@ if __name__ == "__main__":
         elif INPUT == '4':
             query_health_status_number(URL)
         elif INPUT == '99':
+            print("退出")
             break
         else:
             pass
