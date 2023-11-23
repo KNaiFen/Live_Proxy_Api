@@ -17,7 +17,8 @@ def query_request_pools_count(url):
                 total_requests = stats['total_requests']
                 recent_requests = stats['recent_requests']
                 frequency_per_minute = stats['total_frequency_per_minute']
-                print(f"反代池: {pool_name:7} | 总调用次数: {total_requests:5} | 十分钟内调用次数: {recent_requests:5} | 总调用频率: {frequency_per_minute:5.2f} 次/分钟")
+                recent_frequency_per_minute = recent_requests / 10
+                print(f"反代池: {pool_name:7} | 总次数: {total_requests:6} | 10MIN 内次数: {recent_requests:5} | 总频率: {frequency_per_minute:5.1f} 次/MIN | 10MIN 内频率: {recent_frequency_per_minute:4.1f} 次/MIN")
 
 # 查询各个 反代API 健康率
 def query_request_health_count(url):
