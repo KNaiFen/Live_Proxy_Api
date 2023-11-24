@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>状态信息</title>
+    <script>
+        // JavaScript函数用于请求API并更新页面内容
+        async function updateStatus() {
+            const responsePools = await fetch('/api/request_pools_count');
+            const poolsData = await responsePools.json();
+            document.getElementById('poolsCount').textContent = JSON.stringify(poolsData, null, 2);
+
+            const responseHealthData = await fetch('/api/request_health_data');
+            const healthData = await responseHealthData.json();
+            document.getElementById('healthData').textContent = JSON.stringify(healthData, null, 2);
+
+            const responseCookieHealthData = await fetch('/api/cookie_health_data');
+            const cookieHealthData = await responseCookieHealthData.json();
+            document.getElementById('cookieHealthData').textContent = JSON.stringify(cookieHealthData, null, 2);
+
+            const responseHealthStatusNumber = await fetch('/api/health_status_number');
+            const healthStatusNumber = await responseHealthStatusNumber.json();
+            document.getElementById('healthStatusNumber').textContent = JSON.stringify(healthStatusNumber, null, 2);
+        }
+
+        // 当页面加载完成时，自动更新状态
+        window.onload = updateStatus;
+    </script>
+</head>
+<body>
+    <h1>状态信息</h1>
+    <h2>API池调用次数：</h2>
+    <pre id="poolsCount"></pre>
+    <h2>API健康信息：</h2>
+    <pre id="healthData"></pre>
+    <h2>Cookie健康信息：</h2>
+    <pre id="cookieHealthData"></pre>
+    <h2>总体健康状态：</h2>
+    <pre id="healthStatusNumber"></pre>
+</body>
+</html>
