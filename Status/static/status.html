@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>状态信息</title>
     <script>
-        // JavaScript函数用于请求API并更新页面内容
+        // js用于请求api并刷新页面
         async function updateStatus() {
             const responsePools = await fetch('/api/request_pools_count');
             const poolsData = await responsePools.json();
@@ -23,7 +23,7 @@
             document.getElementById('healthStatusNumber').textContent = JSON.stringify(healthStatusNumber, null, 2);
         }
 
-        // 当页面加载完成时，自动更新状态
+        // 加载完成时，自动刷新
         window.onload = updateStatus;
     </script>
 </head>
