@@ -32,7 +32,10 @@ INTERFACE_POOLS:
 
 # COOKIE池
 COOKIESTR_POOL:
-  - cookie: DedeUserID=114514;DedeUserID__ckMd5=114514;Expires=114514;SESSDATA=114514;bili_jct=114514;LIVE_BUVID=114514
-    weight: 1
-  - cookie: DedeUserID=1919810;DedeUserID__ckMd5=1919810;Exp123ires=1919810;SESSDATA=1919810;bili_jct=1919810;LIVE_BUVID=1919810
-    weight: 2
+  # COOKIE名称/ID
+  USER1:
+    - cookie: DedeUserID=114514;DedeUserID__ckMd5=114514;Expires=114514;SESSDATA=114514;bili_jct=114514;LIVE_BUVID=114514
+      weight: 1
+  USER2:
+    - cookie: DedeUserID=1919810;DedeUserID__ckMd5=1919810;Exp123ires=1919810;SESSDATA=1919810;bili_jct=1919810;LIVE_BUVID=1919810
+      weight: 2

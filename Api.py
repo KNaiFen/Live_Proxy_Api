@@ -76,7 +76,7 @@ app = FastAPI()
 async def check_interface_health_async(url: str, max_retries: int = DEFAULT_MAX_RETRIES, retry_interval: int = DEFAULT_RETRY_INTERVAL) -> bool:
     global INTERFACE_HEALTH_DATA
     request_url = f"{url}/room/v1/Room/playUrl?cid=3&qn=10000&platform=web"
-    headers = {USER_AGENT}
+    headers = {'User-Agent': USER_AGENT}
     for _ in range(max_retries):
         try:
             INTERFACE_HEALTH_DATA[url]['total'] += 1
@@ -93,7 +93,7 @@ async def check_interface_health_async(url: str, max_retries: int = DEFAULT_MAX_
     return False
 
 # 异步 Cookie健康检查
-async def check_cookie_health_async(cookie: str) -> bool:
+async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
     def is_login(cookie_str: str):
         url = 'https://api.bilibili.com/x/web-interface/nav'
         try:
@@ -109,7 +109,7 @@ async def check_cookie_health_async(cookie: str) -> bool:
     is_logged_in, _, _, _ = is_login(cookie)
     if is_logged_in:
         return True
-    log.warning(f"此Cookie无效了: {cookie}")
+    log.warning(f"Cookie '{cookie_name}' 无效了")
     return False
 
 # 异步 接口健康检查
@@ -146,9 +146,16 @@ async def interface_health_check_task():
 async def cookie_health_check_task():
     global HEALTH_COOKIESTR_POOL
     while True:
-        HEALTH_COOKIESTR_POOL = [cookie['cookie'] for cookie in ORIGINAL_COOKIESTR_POOL if await check_cookie_health_async(cookie['cookie'])]
+        healthy_cookies = []
+        for cookie_name, cookies in ORIGINAL_COOKIESTR_POOL.items():
+            for cookie_data in cookies:
+                if await check_cookie_health_async(cookie_data['cookie'], cookie_name):
+                    healthy_cookies.append(cookie_data['cookie'])
+
+        HEALTH_COOKIESTR_POOL = healthy_cookies
         log.info(f"当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}")
         await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
+
 
 # 启动健康检查协程
 async def start_health_check_coroutines():
@@ -331,8 +338,10 @@ async def health_status_number():
 # 启动时事件处理
 @app.on_event("startup")
 async def on_startup():
-    asyncio.create_task(start_health_check_coroutines())    # 健康检查
-    asyncio.create_task(cleanup_old_stats())                # 接口数据清理
+    # 健康检查
+    asyncio.create_task(start_health_check_coroutines())
+    # 接口数据清理
+    asyncio.create_task(cleanup_old_stats())
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=5683)
