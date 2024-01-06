@@ -16,7 +16,10 @@ import yaml
 # 根路径
 root_directory = os.path.dirname(os.path.abspath(__file__))
 
-SECRET_KEY = "YourSecretKey"  # 需要加密的接口的认证密匙
+# 需要加密的接口的认证密匙
+SECRET_KEY = "YourSecretKey"
+# 统一UA
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36 Edg/97.0.1072.69'
 
 ### 日志部分
 # 创建目录
@@ -73,7 +76,7 @@ app = FastAPI()
 async def check_interface_health_async(url: str, max_retries: int = DEFAULT_MAX_RETRIES, retry_interval: int = DEFAULT_RETRY_INTERVAL) -> bool:
     global INTERFACE_HEALTH_DATA
     request_url = f"{url}/room/v1/Room/playUrl?cid=3&qn=10000&platform=web"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+    headers = {USER_AGENT}
     for _ in range(max_retries):
         try:
             INTERFACE_HEALTH_DATA[url]['total'] += 1
@@ -92,12 +95,11 @@ async def check_interface_health_async(url: str, max_retries: int = DEFAULT_MAX_
 # 异步 Cookie健康检查
 async def check_cookie_health_async(cookie: str) -> bool:
     def is_login(cookie_str: str):
-        user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36 Edg/97.0.1072.69'
         url = 'https://api.bilibili.com/x/web-interface/nav'
         try:
             pattern = r'bili_jct=([0-9a-zA-Z]+);'
             csrf = re.search(pattern, cookie_str).group(1)
-            headers = {'User-Agent': user_agent, 'Cookie': cookie_str}
+            headers = {'User-Agent': USER_AGENT, 'Cookie': cookie_str}
             response = requests.get(url, headers=headers)
             data = response.json()
             return data['code'] == 0, data, cookie_str, csrf
@@ -107,7 +109,7 @@ async def check_cookie_health_async(cookie: str) -> bool:
     is_logged_in, _, _, _ = is_login(cookie)
     if is_logged_in:
         return True
-    log.error(f"此Cookie无效了: {cookie}")
+    log.warning(f"此Cookie无效了: {cookie}")
     return False
 
 # 异步 接口健康检查
