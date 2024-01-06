@@ -35,23 +35,25 @@ def query_request_health_count(url):
                 total_requests = stats['total']
                 print(f"{api_url:35} | 健康率: {health_rate:5.1f}% | 检查次数: {total_requests}")
 
-# 查询各个 反代API 健康率
+# 查询各个 COOKIE 健康率
 def query_cookie_health_count(url):
     header = {'Authorization': SECRET_KEY}
     result = requests.get(f"{url}/api_status/cookie_health_data", headers=header)
     
     if result.status_code == 200:
         data = result.json()
+        # print(f"data:{data}")
         health_cookies = data.get('health_cookie', [])
         no_health_cookies = data.get('no_health_cookie', [])
 
         print(f"健康Cookie数量: {len(health_cookies)}: ")
         for health_cookie in health_cookies:
-            print(health_cookie)
+            print(f"\nCookieID: {health_cookie['id']}\nCookie: {health_cookie['cookie']}")
         print(f"\n不健康Cookie数量: {len(no_health_cookies)}: ")
         for no_health_cookie in no_health_cookies:
-            print(no_health_cookie)
+            print(f"\nCookieID: {no_health_cookie['id']}\nCookie: {no_health_cookie['cookie']}")
         print()
+
 
 # 查询当前总体健康情况
 def query_health_status_number(url):

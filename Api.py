@@ -318,13 +318,28 @@ async def cookie_health_count(request: Request):
 
     health_cookie = []
     no_health_cookie = []
-    for cookie in ORIGINAL_COOKIESTR_POOL:
+    for user, cookie_data in ORIGINAL_COOKIESTR_POOL.items():
         try:
-            if cookie['cookie'] in HEALTH_COOKIESTR_POOL: health_cookie.append(cookie['cookie'])
-            else: no_health_cookie.append(cookie['cookie'])
+            user_health_cookies = []
+            user_no_health_cookies = []
+            
+            # 检查每个用户的 cookie 是否在健康池中
+            for cookie_item in cookie_data:
+                if cookie_item['cookie'] in HEALTH_COOKIESTR_POOL:
+                    user_health_cookies.append({"id": user, "cookie": cookie_item['cookie']})
+                else:
+                    user_no_health_cookies.append({"id": user, "cookie": cookie_item['cookie']})
+
+            health_cookie.extend(user_health_cookies)
+            no_health_cookie.extend(user_no_health_cookies)
+            
         except Exception as Error:
             log.error(f'health_count: Error: {Error}')
+            log.error(f"Problematic cookie: {user}")
+
     return {'health_cookie': health_cookie, 'no_health_cookie': no_health_cookie}
+
+
 
 # 当前总体健康情况
 @app.get("/api_status/health_status_number")
