@@ -1,4 +1,8 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
@@ -70,7 +74,35 @@ DEFAULT_RETRY_INTERVAL = config.get('DEFAULT_RETRY_INTERVAL', 10)
 INTERFACE_HEALTH_CHECK_INTERVAL = config.get('INTERFACE_HEALTH_CHECK_INTERVAL', 180)
 COOKIE_HEALTH_CHECK_INTERVAL = config.get('INTERFACE_HEALTH_CHECK_INTERVAL', 1 * 3600)
 
+# 提取 API 状态的用户名和密码
+api_status_config = config.get('API_STATUS', {})
+api_username = api_status_config.get('username', 'default_username')
+api_password = api_status_config.get('password', 'default_password')
+
 app = FastAPI()
+
+# 设置基本认证
+security = HTTPBasic()
+
+# 认证函数
+def basic_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, api_username)
+    correct_password = secrets.compare_digest(credentials.password, api_password)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials
+
+# 静态文件目录
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 主页路由，提供监控UI
+@app.get("/api_status", dependencies=[Depends(basic_auth)])
+async def api_status_page():
+    return FileResponse("static/api_status.html")
 
 # 异步 接口检查请求
 async def check_interface_health_async(url: str, max_retries: int = DEFAULT_MAX_RETRIES, retry_interval: int = DEFAULT_RETRY_INTERVAL) -> bool:

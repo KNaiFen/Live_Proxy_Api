@@ -10,6 +10,14 @@ DEFAULT_MAX_RETRIES: 2
 # (可选)全局节点重试间隔时间(秒)，默认10秒
 DEFAULT_RETRY_INTERVAL: 10
 
+# API监控页面
+API_STATUS:
+  # 认证账号
+  username: "admin"
+  # 认证密码
+  password: "admin"
+
+
 # 代理池
 INTERFACE_POOLS:
   # 代理池名称
@@ -36,6 +44,3 @@ COOKIESTR_POOL:
   USER1:
     - cookie: DedeUserID=114514;DedeUserID__ckMd5=114514;Expires=114514;SESSDATA=114514;bili_jct=114514;LIVE_BUVID=114514
       weight: 1
-  USER2:
-    - cookie: DedeUserID=1919810;DedeUserID__ckMd5=1919810;Exp123ires=1919810;SESSDATA=1919810;bili_jct=1919810;LIVE_BUVID=1919810
-      weight: 2

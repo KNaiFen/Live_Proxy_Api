@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>API 状态</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f4f4f4;
+            text-align: center;
+        }
+        .container {
+            width: 80%;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        #output {
+            margin-top: 20px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API 状态</h1>
+        <button onclick="queryRequestPoolsCount()">查询反代API池状态</button>
+        <button onclick="queryRequestHealthCount()">查询反代API健康率</button>
+        <button onclick="queryCookieHealthCount()">查询Cookie健康情况</button>
+        <button onclick="queryHealthStatusNumber()">查询当前总体健康情况</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const apiUrl = 'http://127.0.0.1:5683/api_status';
+        const secretKey = 'YourSecretKey';
+
+        async function queryRequestPoolsCount() {
+            const response = await fetch(`${apiUrl}/request_pools_count`);
+            const data = await response.json();
+            displayData(data, '反代API池状态');
+        }
+
+        async function queryRequestHealthCount() {
+            const response = await fetch(`${apiUrl}/request_health_data`, {
+                headers: {'Authorization': secretKey}
+            });
+            const data = await response.json();
+            displayData(data, '反代API健康率');
+        }
+
+        async function queryCookieHealthCount() {
+            const response = await fetch(`${apiUrl}/cookie_health_data`, {
+                headers: {'Authorization': secretKey}
+            });
+            const data = await response.json();
+            displayData(data, 'Cookie健康情况');
+        }
+
+        async function queryHealthStatusNumber() {
+            const response = await fetch(`${apiUrl}/health_status_number`);
+            const data = await response.json();
+            displayData(data, '当前总体健康情况');
+        }
+
+        function displayData(data, title) {
+            let output = `<h2>${title}</h2>`;
+            output += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            document.getElementById('output').innerHTML = output;
+        }
+    </script>
+</body>
+</html>
