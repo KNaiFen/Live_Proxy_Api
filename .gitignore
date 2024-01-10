@@ -1,6 +1,5 @@
 config.yaml
 Api.bak.py
-Api copy.py
-Status copy.py
+* copy.*
 .gitignore
 logs/

@@ -54,6 +54,12 @@
 <body>
     <div class="container">
         <h1>API 状态</h1>
+        <div>
+            <label for="secretKey">密钥: </label>
+            <input type="password" id="secretKey" placeholder="输入密钥">
+            <button onclick="saveSecretKey()">确认</button>
+            <label><input type="checkbox" id="rememberMe"> 记住密钥</label>
+        </div>
         <button onclick="queryRequestPoolsCount()">查询反代API池状态</button>
         <button onclick="queryRequestHealthCount()">查询反代API健康率</button>
         <button onclick="queryCookieHealthCount()">查询Cookie健康情况</button>
@@ -64,7 +70,49 @@
 
     <script>
         const baseApiUrl = window.location.origin + '/api_status';
-        const secretKey = 'YourSecretKey';
+        let secretKey = '';
+
+        window.onload = function () {
+            // 尝试从 cookie 中获取密钥
+            const savedKey = getCookie('secretKey');
+            if (savedKey) {
+                document.getElementById('secretKey').value = savedKey;
+                secretKey = savedKey;
+                document.getElementById('rememberMe').checked = true;
+            }
+        };
+
+        function saveSecretKey() {
+            secretKey = document.getElementById('secretKey').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+            if (rememberMe) {
+                setCookie('secretKey', secretKey, 30); // 保存 30 天
+            } else {
+                deleteCookie('secretKey');
+            }
+        }
+
+        function setCookie(name, value, days) {
+            const d = new Date();
+            d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+            let expires = "expires=" + d.toUTCString();
+            document.cookie = name + "=" + value + ";" + expires + ";path=/";
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        function deleteCookie(name) {
+            setCookie(name, "", -1);
+        }
 
         async function queryRequestPoolsCount() {
             const response = await fetch(`${baseApiUrl}/request_pools_count`);
