@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
     <meta charset="UTF-8">
     <title>API 状态</title>
@@ -11,6 +12,7 @@
             background: #f4f4f4;
             text-align: center;
         }
+
         .container {
             width: 80%;
             margin: 20px auto;
@@ -18,25 +20,31 @@
             padding: 20px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
         }
-        th, td {
+
+        th,
+        td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
         }
+
         th {
             background-color: #f2f2f2;
         }
+
         .output {
             margin-top: 20px;
             text-align: left;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>API 状态</h1>
@@ -47,27 +55,21 @@
     </div>
 
     <script>
-        const apiUrl = 'http://127.0.0.1:5683/api_status';
-        const secretKey = 'YourSecretKey';
+        // 获取APIURL
+        const baseApiUrl = window.location.origin + '/api_status';
 
         async function fetchData(endpoint, authorization = false) {
-            const headers = authorization ? { 'Authorization': secretKey } : {};
-            const response = await fetch(`${apiUrl}/${endpoint}`, { headers });
+            const headers = authorization ? { 'Authorization': 'YourSecretKey' } : {};
+            const response = await fetch(`${baseApiUrl}/${endpoint}`, { headers });
             return response.json();
         }
 
         async function updateData() {
-            const requestPoolsData = await fetchData('request_pools_count');
-            displayData(requestPoolsData, '反代API池状态', 'requestPoolsCount');
-
-            const requestHealthData = await fetchData('request_health_data', true);
-            displayData(requestHealthData, '反代API健康率', 'requestHealthCount');
-
-            const cookieHealthData = await fetchData('cookie_health_data', true);
-            displayData(cookieHealthData, 'Cookie健康情况', 'cookieHealthCount');
-
-            const healthStatusData = await fetchData('health_status_number');
-            displayData(healthStatusData, '当前总体健康情况', 'healthStatusNumber');
+            // 发送请求获取数据并展示
+            displayData(await fetchData('request_pools_count'), '反代API池状态', 'requestPoolsCount');
+            displayData(await fetchData('request_health_data', true), '反代API健康率', 'requestHealthCount');
+            displayData(await fetchData('cookie_health_data', true), 'Cookie健康情况', 'cookieHealthCount');
+            displayData(await fetchData('health_status_number'), '当前总体健康情况', 'healthStatusNumber');
         }
 
         function displayData(data, title, elementId) {
@@ -83,4 +85,5 @@
         setInterval(updateData, 60000);
     </script>
 </body>
+
 </html>
