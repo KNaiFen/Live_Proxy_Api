@@ -131,6 +131,9 @@ async def check_interface_health_async(
         except httpx.HTTPError as http_err:
             # log.error(f"Error: check_interface_health_async: {url}")
             pass
+        except Exception as Error:
+            # log.error(f"Error: {Error}")
+            pass
         await asyncio.sleep(retry_interval)
 
     return False
