@@ -69,6 +69,10 @@ ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
 HEALTH_COOKIESTR_POOL = []
 
+# 监听IP和端口
+HOST = config.get("HOST", "127.0.0.1")
+PORT = config.get("PORT", 5687)
+
 # 接口检查请求参数
 DEFAULT_MAX_RETRIES = config.get("DEFAULT_MAX_RETRIES", 2)
 DEFAULT_RETRY_INTERVAL = config.get("DEFAULT_RETRY_INTERVAL", 10)
@@ -77,7 +81,7 @@ DEFAULT_RETRY_INTERVAL = config.get("DEFAULT_RETRY_INTERVAL", 10)
 INTERFACE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 180)
 COOKIE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 1 * 3600)
 
-# 提取 API 状态的用户名和密码
+# API状态页的用户名和密码
 api_status_config = config.get("API_STATUS", {})
 api_username = api_status_config.get("username", "default_username")
 api_password = api_status_config.get("password", "default_password")
@@ -473,4 +477,4 @@ async def on_startup():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="10.0.0.101", port=5683)
+    uvicorn.run(app, host=HOST, port=PORT)
