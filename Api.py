@@ -20,8 +20,6 @@ import yaml
 # 根路径
 root_directory = os.path.dirname(os.path.abspath(__file__))
 
-# 需要加密的接口的认证密匙
-SECRET_KEY = "YourSecretKey"
 # 统一UA
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36 Edg/97.0.1072.69"
 
@@ -81,10 +79,16 @@ DEFAULT_RETRY_INTERVAL = config.get("DEFAULT_RETRY_INTERVAL", 10)
 INTERFACE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 180)
 COOKIE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 1 * 3600)
 
+# 接口的认证密匙
+SECRET_KEY = config.get("SECRET_KEY")
+if SECRET_KEY is None or SECRET_KEY == "":
+    raise ValueError("SECRET_KEY 不允许为空，请检查配置文件.")
+
 # API状态页的用户名和密码
 api_status_config = config.get("API_STATUS", {})
-api_username = api_status_config.get("username", "default_username")
-api_password = api_status_config.get("password", "default_password")
+api_status_enable = api_status_config.get("enable", False)
+api_username = api_status_config.get("username", "admin")
+api_password = api_status_config.get("password", "admin")
 
 app = FastAPI()
 
@@ -109,10 +113,12 @@ def basic_auth(credentials: HTTPBasicCredentials = Depends(security)):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# 主页路由，提供监控UI
-@app.get("/api_status", dependencies=[Depends(basic_auth)])
-async def api_status_page():
-    return FileResponse("static/api_status.html")
+# api状态页
+if api_status_enable:
+
+    @app.get("/api_status", dependencies=[Depends(basic_auth)])
+    async def api_status_page():
+        return FileResponse("static/api_status.html")
 
 
 # 异步 接口检查请求
@@ -410,8 +416,7 @@ async def request_pools_count():
 async def request_health_count(request: Request):
     auth_key = request.headers.get("Authorization")
     if auth_key != SECRET_KEY:
-        raise HTTPException(status_code=404, detail="Unauthorized")
-
+        raise HTTPException(status_code=401, detail="未授权")
     health_data = []
     for url, data in INTERFACE_HEALTH_DATA.items():
         health_rate = (
@@ -426,7 +431,7 @@ async def request_health_count(request: Request):
 async def cookie_health_count(request: Request):
     auth_key = request.headers.get("Authorization")
     if auth_key != SECRET_KEY:
-        raise HTTPException(status_code=404, detail="Unauthorized")
+        raise HTTPException(status_code=401, detail="未授权")
 
     health_cookie = []
     no_health_cookie = []

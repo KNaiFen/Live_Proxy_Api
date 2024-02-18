@@ -16,13 +16,17 @@ DEFAULT_MAX_RETRIES: 2
 # (可选)全局 节点重试间隔时间(秒)，默认10秒
 DEFAULT_RETRY_INTERVAL: 10
 
-# API监控页面
-API_STATUS:
-  # 认证账号
-  username: "admin"
-  # 认证密码
-  password: "admin"
+# (必要)接口的认证密匙，空着会报错
+SECRET_KEY: "1145141919810"
 
+# API状态页面
+API_STATUS:
+  # (可选)是否启用状态页面，默认否
+  enable: false
+  # (可选)认证账号，默认admin
+  username: "admin"
+  # (可选)认证密码，默认admin
+  password: "admin"
 
 # 代理池
 INTERFACE_POOLS:
