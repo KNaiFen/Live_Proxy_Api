@@ -34,12 +34,13 @@ log_format = logging.Formatter(
 )
 
 # 创建文件处理器
-log_file = os.path.join(logs_directory, "LB.log")
+log_file = os.path.join(logs_directory, f"{datetime.now().strftime('%Y-%m-%d')}.log")
 file_handler = TimedRotatingFileHandler(
     log_file, when="D", interval=1, backupCount=30, encoding="utf-8"
 )
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(log_format)
+
 
 # 创建流处理器，用于输出日志到控制台
 stream_handler = logging.StreamHandler()
@@ -238,6 +239,7 @@ async def cookie_health_check_task():
 
 # 启动健康检查协程
 async def start_health_check_coroutines():
+    log.info("程序已启动, 开始进行 API&Cookie 健康检查")
     await asyncio.gather(interface_health_check_task(), cookie_health_check_task())
 
 
