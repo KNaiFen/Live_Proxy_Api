@@ -86,7 +86,7 @@
             secretKey = document.getElementById('secretKey').value;
             const rememberMe = document.getElementById('rememberMe').checked;
             if (rememberMe) {
-                setCookie('secretKey', secretKey, 30); // 保存 30 天
+                setCookie('secretKey', secretKey, 30);
             } else {
                 deleteCookie('secretKey');
             }
