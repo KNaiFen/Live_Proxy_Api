@@ -16,6 +16,11 @@ import re
 import asyncio
 import json
 import yaml
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from email.utils import formatdate
 
 # 根路径
 root_directory = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +39,7 @@ log_format = logging.Formatter(
 )
 
 # 创建文件处理器
-log_file = os.path.join(logs_directory, f"{datetime.now().strftime('%Y-%m-%d')}.log")
+log_file = os.path.join(logs_directory, f"log")
 file_handler = TimedRotatingFileHandler(
     log_file, when="D", interval=1, backupCount=30, encoding="utf-8"
 )
@@ -63,6 +68,7 @@ log.addHandler(stream_handler)
 with open(os.path.join(root_directory, "config.yaml"), "r", encoding="utf-8") as file:
     config = yaml.safe_load(file)
 
+# 接口与Cookie
 INTERFACE_POOLS = config["INTERFACE_POOLS"]
 ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
@@ -83,7 +89,17 @@ COOKIE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 1 *
 # 接口的认证密匙
 SECRET_KEY = config.get("SECRET_KEY")
 if SECRET_KEY is None or SECRET_KEY == "":
-    raise ValueError("SECRET_KEY 不允许为空，请检查配置文件.")
+    raise ValueError("[配置] SECRET_KEY 不允许为空，请检查配置文件.")
+
+# 邮件配置
+SMTP_CONFIG = config.get("SMTP", {})
+SMTP_ENABLE = SMTP_CONFIG.get("enable", False)
+SENDER_EMAIL = SMTP_CONFIG.get("sender_email", "")
+SENDER_PASSWORD = SMTP_CONFIG.get("sender_password", "")
+RECEIVER_EMAIL = SMTP_CONFIG.get("receiver_email", "")
+SMTP_SERVER = SMTP_CONFIG.get("smtp_server", "")
+SMTP_SSL = SMTP_CONFIG.get("smtp_ssl", "")
+SMTP_PORT = SMTP_CONFIG.get("smtp_port", "")
 
 # API状态页的用户名和密码
 api_status_config = config.get("API_STATUS", {})
@@ -121,6 +137,32 @@ if api_status_enable:
     async def api_status_page():
         return FileResponse("static/api_status.html")
 
+# 邮件发送方法
+def send_email(subject, body):
+    if not SMTP_ENABLE:
+        log.info("[邮件] SMTP 功能已禁用。")
+        return
+
+    # 构建邮件
+    msg = MIMEMultipart()
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = RECEIVER_EMAIL
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    # 连接SMTP服务器并发送邮件
+    try:
+        if SMTP_SSL:
+            server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        else:
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        log.info("[邮件] 邮件登录成功")
+        server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+        log.info("[邮件] 邮件发送成功")
+        server.quit()
+    except Exception as e:
+        log.error(f"[邮件] 邮件发送失败: {e}")
 
 # 异步 接口检查请求
 async def check_interface_health_async(
@@ -167,8 +209,10 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
     is_logged_in, _, _, _ = is_login(cookie)
     if is_logged_in:
         return True
-    log.warning(f"Cookie '{cookie_name}' 无效了")
-    return False
+    else:
+        log.warning(f"[检查] Cookie '{cookie_name}' 无效了")
+        send_email("[检查] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。")
+        return False
 
 
 # 异步 接口健康检查
@@ -212,12 +256,7 @@ async def interface_health_check_task():
                 if status["is_healthy"]
             ]
 
-        log.info(
-            "当前健康接口数: "
-            + ", ".join(
-                f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()
-            )
-        )
+        log.info("[检查] 当前健康接口数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()))
 
         await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
 
@@ -233,7 +272,7 @@ async def cookie_health_check_task():
                     healthy_cookies.append(cookie_data["cookie"])
 
         HEALTH_COOKIESTR_POOL = healthy_cookies
-        log.info(f"当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}")
+        log.info(f"[检查] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}")
         await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
 
 
@@ -283,7 +322,8 @@ async def handle_proxy_request(
     # chosen_cookie = random.choice(HEALTH_COOKIESTR_POOL) if HEALTH_COOKIESTR_POOL else None
 
     if not target_url:
-        log.warning("没有可用的健康接口")
+        log.warning("[检查] 没有可用的健康接口")
+        send_email("[检查] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
         raise HTTPException(status_code=400, detail="No healthy interfaces available")
 
     method = request.method
@@ -311,7 +351,7 @@ async def handle_proxy_request(
         else:
             headers.pop("host", None)
             headers["Cookie"] = ""
-            log.warning("没有配置 Cookie 或 Cookie 已过期")
+            log.warning("[检查] 没有配置 Cookie 或 Cookie 已过期")
     else:
         headers.pop("cookie", None)
         headers.pop("host", None)

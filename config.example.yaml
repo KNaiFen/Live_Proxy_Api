@@ -19,6 +19,23 @@ DEFAULT_RETRY_INTERVAL: 10
 # (必要)接口的认证密匙，空着会报错
 SECRET_KEY: "1145141919810"
 
+# SMTP邮件通知
+SMTP:
+  # (可选)是否启用SMTP，默认否
+  enable: false
+  # (必要)发件人邮箱
+  sender_email: "your_email@example.com"
+  # (必要)发件人邮箱密码
+  sender_password: "your_email_password"
+  # (必要)收件人邮箱
+  receiver_email: "receiver_email@example.com"
+  # (必要)发件人邮箱的SMTP服务器地址
+  smtp_server: "smtp.exmail.com"
+  # (必要)是否使用SSL加密连接SMTP服务器
+  smtp_ssl: True
+  # (必要)SMTP端口
+  smtp_port: 465
+
 # API状态页面
 API_STATUS:
   # (可选)是否启用状态页面，默认否
