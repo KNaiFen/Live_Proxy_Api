@@ -4,16 +4,16 @@ HOST: 127.0.0.1
 # (可选)监听端口，默认5687
 PORT: 5687
 
-# (可选)全局 节点健康检查间隔(秒)，默认180秒
+# (可选)全局 API健康检查间隔(秒)，默认180秒
 INTERFACE_HEALTH_CHECK_INTERVAL: 180
 
 # (可选)全局 Cookie健康检查间隔(秒)，默认3600秒
 COOKIE_HEALTH_CHECK_INTERVAL: 3600
 
-# (可选)全局 节点最大重试次数，默认2次
+# (可选)全局 API最大重试次数，默认2次
 DEFAULT_MAX_RETRIES: 2
 
-# (可选)全局 节点重试间隔时间(秒)，默认10秒
+# (可选)全局 API重试间隔时间(秒)，默认10秒
 DEFAULT_RETRY_INTERVAL: 10
 
 # (必要)接口的认证密匙，空着会报错
@@ -45,12 +45,12 @@ API_STATUS:
   # (可选)认证密码，默认admin
   password: "admin"
 
-# 代理池
+# API池
 INTERFACE_POOLS:
-  # 代理池名称
+  # API池名称
   OV:
     INTERFACE_POOL:
-      # 节点URL/IP端口
+      # API URL/IP端口
       - url: http(s)://example.com
         # 权重
         weight: 1

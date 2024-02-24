@@ -138,6 +138,7 @@ if api_status_enable:
         return FileResponse("static/api_status.html")
 
 # 邮件发送方法
+# 使用方式 send_email("标题", "内容")
 def send_email(subject, body):
     if not SMTP_ENABLE:
         log.info("[邮件] SMTP 功能已禁用。")
@@ -256,8 +257,12 @@ async def interface_health_check_task():
                 if status["is_healthy"]
             ]
 
-        log.info("[检查] 当前健康接口数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()))
-
+        log.info(
+            "[检查] 当前健康接口数: "
+            + ", ".join(
+                f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()
+            )
+        )
         await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
 
 
@@ -322,8 +327,8 @@ async def handle_proxy_request(
     # chosen_cookie = random.choice(HEALTH_COOKIESTR_POOL) if HEALTH_COOKIESTR_POOL else None
 
     if not target_url:
-        log.warning("[检查] 没有可用的健康接口")
-        send_email("[检查] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
+        log.warning("[请求] 没有可用的健康接口")
+        send_email("[请求] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
         raise HTTPException(status_code=400, detail="No healthy interfaces available")
 
     method = request.method
@@ -351,7 +356,8 @@ async def handle_proxy_request(
         else:
             headers.pop("host", None)
             headers["Cookie"] = ""
-            log.warning("[检查] 没有配置 Cookie 或 Cookie 已过期")
+            log.warning("[请求] 没有配置 Cookie 或 Cookie 已过期")
+            send_email("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
     else:
         headers.pop("cookie", None)
         headers.pop("host", None)
