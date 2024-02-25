@@ -20,3 +20,10 @@ http://localhost:5683/api_live/use_cookie/{代理池名称}
 # 不使用Cookie
 http://localhost:5683/api_live/no_cookie/{代理池名称}
 ```
+
+
+## 联系
+```
+# 录播姬闲聊群 179319267
+![qrcode_1708848596572](https://github.com/KNaiFen/Live_Proxy_Api/assets/39889850/9bdc28b8-645f-40d7-b24f-36fe0dd3e37f)
+```
