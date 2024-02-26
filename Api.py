@@ -38,24 +38,24 @@ log_format = logging.Formatter(
     "%(asctime)s [%(levelname)s]: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# 创建文件处理器
-log_file = os.path.join(logs_directory, f"log")
+# 文件处理器
+log_file = os.path.join(logs_directory, "log")
 file_handler = TimedRotatingFileHandler(
     log_file, when="D", interval=1, backupCount=30, encoding="utf-8"
 )
-file_handler.setLevel(logging.INFO)
+file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(log_format)
 
-
-# 创建流处理器，用于输出日志到控制台
+# 控制台流处理器
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(log_format)
 
 # 配置根日志记录器
 root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
+root_logger.setLevel(logging.DEBUG)
 root_logger.addHandler(file_handler)
+root_logger.addHandler(stream_handler)
 
 # 配置特定的日志记录器
 log = logging.getLogger("Root")
@@ -141,7 +141,7 @@ if api_status_enable:
 # 使用方式 send_email("标题", "内容")
 def send_email(subject, body):
     if not SMTP_ENABLE:
-        log.info("[邮件] SMTP 功能已禁用。")
+        log.debug("[邮件] SMTP 功能已禁用。")
         return
 
     # 构建邮件
@@ -158,7 +158,7 @@ def send_email(subject, body):
         else:
             server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        log.info("[邮件] 邮件登录成功")
+        log.debug("[邮件] 邮件登录成功")
         server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
         log.info("[邮件] 邮件发送成功")
         server.quit()
@@ -349,7 +349,7 @@ async def handle_proxy_request(
             if weighted_healthy_cookies
             else None
         )
-        # log.info(f"选择Cookie: {chosen_cookie}")
+        log.debug(f"[请求] 选择Cookie: {chosen_cookie}")
         if chosen_cookie:
             headers.pop("cookie", None)
             headers.pop("host", None)
