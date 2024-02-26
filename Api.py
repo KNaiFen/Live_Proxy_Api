@@ -137,7 +137,7 @@ if api_status_enable:
     async def api_status_page():
         return FileResponse("static/api_status.html")
 
-# 邮件发送方法
+# 邮件发送
 # 使用方式 send_email("标题", "内容")
 def send_email(subject, body):
     if not SMTP_ENABLE:
@@ -204,8 +204,9 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
             response = requests.get(url, headers=headers)
             data = response.json()
             return data["code"] == 0, data, cookie_str, csrf
-        except:
-            return False, _, _, _
+        except Exception as e:
+            log.error(f"[检查] 检查 Cookie 时出错: {e}")
+            return False, None, None, None
 
     is_logged_in, _, _, _ = is_login(cookie)
     if is_logged_in:
