@@ -38,7 +38,7 @@ log_format = logging.Formatter(
     "%(asctime)s [%(levelname)s]: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# 文件处理器
+# 日志文件处理器
 log_file = os.path.join(logs_directory, "log")
 file_handler = TimedRotatingFileHandler(
     log_file, when="D", interval=1, backupCount=30, encoding="utf-8"
@@ -46,7 +46,8 @@ file_handler = TimedRotatingFileHandler(
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(log_format)
 
-# 控制台流处理器
+
+# 控制台处理器
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(log_format)
@@ -55,12 +56,12 @@ stream_handler.setFormatter(log_format)
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.DEBUG)
 root_logger.addHandler(file_handler)
-root_logger.addHandler(stream_handler)
 
 # 配置特定的日志记录器
 log = logging.getLogger("Root")
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 log.addHandler(stream_handler)
+
 
 
 ### 负载均衡API实现
