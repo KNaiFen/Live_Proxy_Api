@@ -6,7 +6,7 @@ SECRET_KEY = "YourSecretKey"
 
 # 查询各个 反代API池 的调用次数和总调用次数 
 def query_request_pools_count(url):
-    result = requests.get(f"{url}/api_status/request_pools_count")
+    result = requests.get(f"{url}/api/status/request")
     
     if result.status_code == 200:
         data = result.json()
@@ -23,7 +23,7 @@ def query_request_pools_count(url):
 # 查询各个 反代API 健康率
 def query_request_health_count(url):
     header = {'Authorization': SECRET_KEY}
-    result = requests.get(f"{url}/api_status/request_health_data", headers=header)
+    result = requests.get(f"{url}/api/status/api/health", headers=header)
     
     if result.status_code == 200:
         data = result.json()
@@ -38,7 +38,7 @@ def query_request_health_count(url):
 # 查询各个 COOKIE 健康率
 def query_cookie_health_count(url):
     header = {'Authorization': SECRET_KEY}
-    result = requests.get(f"{url}/api_status/cookie_health_data", headers=header)
+    result = requests.get(f"{url}/api/status/cookie/health", headers=header)
     
     if result.status_code == 200:
         data = result.json()
@@ -57,7 +57,7 @@ def query_cookie_health_count(url):
 
 # 查询当前总体健康情况
 def query_health_status_number(url):
-    result = requests.get(f"{url}/api_status/health_status_number")
+    result = requests.get(f"{url}/api/status")
     
     if result.status_code == 200:
         data = result.json()

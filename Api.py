@@ -69,7 +69,6 @@ ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
 HEALTH_COOKIESTR_POOL = []
 
-
 ## 邮件配置
 CONFIG_SMTP = config.get("SMTP", {})
 SMTP_ENABLE = CONFIG_SMTP.get("enable", False)
@@ -121,6 +120,7 @@ def log():
 
     return logger
 
+
 logger = log()
 
 
@@ -128,13 +128,13 @@ logger = log()
 def log_and_print(message, prefix="", level="INFO"):
     if isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
-    
+
     # 获取全局日志记录器
     logger = logging.getLogger()
-    
+
     # 记录日志
     logger.log(level, message)
-    
+
     # 打印信息
     print(prefix + message)
 
@@ -166,7 +166,7 @@ if api_status_enable:
         return FileResponse("static/api_status.html")
 
 
-# 邮件发送
+## SMTP
 # 使用方式 send_email("标题", "内容")
 def send_email(subject, body):
     if not SMTP_ENABLE:
@@ -192,7 +192,7 @@ def send_email(subject, body):
         logger.debug("[邮件] 邮件发送成功")
         server.quit()
     except Exception as e:
-        logger.error(f"[邮件] 邮件发送失败: {e}")
+        log_and_print("[邮件] 邮件发送失败: {e}' 无效了", "ERROR:     ", "ERROR")
 
 
 # 异步 接口检查请求
@@ -203,7 +203,7 @@ async def check_interface_health_async(
 ) -> bool:
     global INTERFACE_HEALTH_DATA
     request_url = f"{url}/room/v1/Room/playUrl?cid=3&qn=10000&platform=web"
-    headers = {"Accept-Encoding": "gzip, deflate, br", "User-Agent": USER_AGENT}
+    headers = {"User-Agent": USER_AGENT}
     for _ in range(max_retries):
         try:
             INTERFACE_HEALTH_DATA[url]["total"] += 1
@@ -236,7 +236,9 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
             return data["code"] == 0, data, cookie_str, csrf
         except Exception as e:
             logger.error(f"[状态] 检查 Cookie 时出错: {e}")
-            log_and_print(f"[状态] 检查 Cookie 时出错: {e}' 无效了", "ERROR:     ", "ERROR")
+            log_and_print(
+                f"[状态] 检查 Cookie 时出错: {e}' 无效了", "ERROR:     ", "ERROR"
+            )
             return False, None, None, None
 
     is_logged_in, _, _, _ = is_login(cookie)
@@ -291,7 +293,14 @@ async def interface_health_check_task():
                 if status["is_healthy"]
             ]
 
-        log_and_print("[状态] 当前健康接口数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()),"INFO:     ", "INFO")
+        log_and_print(
+            "[状态] 当前健康接口数: "
+            + ", ".join(
+                f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()
+            ),
+            "INFO:     ",
+            "INFO",
+        )
 
         try:
             await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
@@ -311,7 +320,11 @@ async def cookie_health_check_task():
                     healthy_cookies.append(cookie_data["cookie"])
 
         HEALTH_COOKIESTR_POOL = healthy_cookies
-        log_and_print(f"[状态] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}","INFO:     ", "INFO")
+        log_and_print(
+            f"[状态] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}",
+            "INFO:     ",
+            "INFO",
+        )
 
         try:
             await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
@@ -351,7 +364,7 @@ async def handle_proxy_request(
         assert False, "Oops!"
 
     if pool_name not in HEALTH_INTERFACE_POOLS:
-        raise HTTPException(status_code=404, detail="不存在代理池")
+        raise HTTPException(status_code=404, detail="不存在的代理池")
 
     update_request_stats(pool_name)
 
@@ -394,14 +407,14 @@ async def handle_proxy_request(
         else:
             headers.pop("host", None)
             headers["Cookie"] = ""
-            log_and_print("[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING")
+            log_and_print(
+                "[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING"
+            )
             send_email("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
     else:
         headers.pop("cookie", None)
         headers.pop("host", None)
         headers["Cookie"] = ""
-
-    headers["Accept-Encoding"] = "gzip, deflate, br"
 
     async with httpx.AsyncClient() as client:
         try:
@@ -419,9 +432,9 @@ async def handle_proxy_request(
     try:
         data = json.loads(response.content.decode("utf-8", "ignore"))
     except json.JSONDecodeError:
-        logger.error("JSON解析错误")
-        print(response.content)
-        raise HTTPException(status_code=500, detail="Invalid JSON response")
+        log_and_print("JSON解析错误", "ERROR:     ", "ERROR")
+        log_and_print(f"请求数据: {response.content}", "ERROR:     ", "ERROR")
+        raise HTTPException(status_code=500, detail="无效的JSON请求")
     return liveStreamProcess(data)
 
 
@@ -569,7 +582,8 @@ async def cookie_health(request: Request):
 @app.on_event("shutdown")
 async def shutdown():
     logger.info("程序关闭")
-    
+
+
 # 启动时事件处理
 @app.on_event("startup")
 async def on_startup():
