@@ -23,84 +23,20 @@ from email.mime.application import MIMEApplication
 from email.utils import formatdate
 
 # 根路径
-root_directory = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.abspath(__file__))
 
-# 统一UA
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36 Edg/97.0.1072.69"
-
-### 日志部分
-# 创建目录
-logs_directory = os.path.join(root_directory, "logs")
-Path(logs_directory).mkdir(parents=True, exist_ok=True)
-
-# 配置日志格式
-log_format = logging.Formatter(
-    "%(asctime)s [%(levelname)s]: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-)
-
-# 日志文件处理器
-log_file = os.path.join(logs_directory, "log")
-file_handler = TimedRotatingFileHandler(
-    log_file, when="D", interval=1, backupCount=30, encoding="utf-8"
-)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(log_format)
-
-
-# 控制台处理器
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.INFO)
-stream_handler.setFormatter(log_format)
-
-# 配置根日志记录器
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
-root_logger.addHandler(file_handler)
-
-# 配置特定的日志记录器
-log = logging.getLogger("Root")
-log.setLevel(logging.DEBUG)
-log.addHandler(stream_handler)
-
-
-
-### 负载均衡API实现
-# 配置文件
-with open(os.path.join(root_directory, "config.yaml"), "r", encoding="utf-8") as file:
+### 配置部分
+## 读取配置文件
+config_file_path = os.path.join(root_dir, "config.yaml")
+with open(config_file_path, "r", encoding="utf-8") as file:
     config = yaml.safe_load(file)
 
-# 接口与Cookie
-INTERFACE_POOLS = config["INTERFACE_POOLS"]
-ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
-HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
-HEALTH_COOKIESTR_POOL = []
-
-# 监听IP和端口
+## 监听IP和端口
 HOST = config.get("HOST", "127.0.0.1")
 PORT = config.get("PORT", 5687)
 
-# 接口检查请求参数
-DEFAULT_MAX_RETRIES = config.get("DEFAULT_MAX_RETRIES", 2)
-DEFAULT_RETRY_INTERVAL = config.get("DEFAULT_RETRY_INTERVAL", 10)
-
-# 健康检查的频率
-INTERFACE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 180)
-COOKIE_HEALTH_CHECK_INTERVAL = config.get("INTERFACE_HEALTH_CHECK_INTERVAL", 1 * 3600)
-
-# 接口的认证密匙
-SECRET_KEY = config.get("SECRET_KEY")
-if SECRET_KEY is None or SECRET_KEY == "":
-    raise ValueError("[配置] SECRET_KEY 不允许为空，请检查配置文件.")
-
-# 邮件配置
-SMTP_CONFIG = config.get("SMTP", {})
-SMTP_ENABLE = SMTP_CONFIG.get("enable", False)
-SENDER_EMAIL = SMTP_CONFIG.get("sender_email", "")
-SENDER_PASSWORD = SMTP_CONFIG.get("sender_password", "")
-RECEIVER_EMAIL = SMTP_CONFIG.get("receiver_email", "")
-SMTP_SERVER = SMTP_CONFIG.get("smtp_server", "")
-SMTP_SSL = SMTP_CONFIG.get("smtp_ssl", "")
-SMTP_PORT = SMTP_CONFIG.get("smtp_port", "")
+# UA
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
 
 # API状态页的用户名和密码
 api_status_config = config.get("API_STATUS", {})
@@ -108,24 +44,115 @@ api_status_enable = api_status_config.get("enable", False)
 api_username = api_status_config.get("username", "admin")
 api_password = api_status_config.get("password", "admin")
 
-app = FastAPI()
+# 接口的认证密匙
+API_KEY = config.get("API_KEY")
+if not API_KEY:
+    raise ValueError("[配置] API_KEY 不允许为空，请检查配置文件.")
 
-# 设置基本认证
-security = HTTPBasic()
+
+## 健康检查部分
+CONFIG_HC = config.get("HEALTH_CHECK", {})
+## API配置
+# API健康检查 间隔(秒)，默认180秒
+INTERFACE_HEALTH_CHECK_INTERVAL = CONFIG_HC.get("API", {}).get("INTERVAL", 180)
+# API健康检查 错误 最大重试次数，默认2次
+DEFAULT_MAX_RETRIES = CONFIG_HC.get("API", {}).get("MAX_RETRY", 2)
+# API健康检查 错误 重试间隔时间(秒)，默认10秒
+DEFAULT_RETRY_INTERVAL = CONFIG_HC.get("API", {}).get("MAX_RETRY_INTERVAL", 10)
+## Cookie
+# Cookie健康检查间隔(秒)，默认3600秒
+COOKIE_HEALTH_CHECK_INTERVAL = CONFIG_HC.get("COOKIE", {}).get("INTERVAL", 1 * 3600)
+
+## 接口与Cookie池
+INTERFACE_POOLS = config["INTERFACE_POOLS"]
+ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
+HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
+HEALTH_COOKIESTR_POOL = []
 
 
-# 认证函数
-def basic_auth(credentials: HTTPBasicCredentials = Depends(security)):
+## 邮件配置
+CONFIG_SMTP = config.get("SMTP", {})
+SMTP_ENABLE = CONFIG_SMTP.get("enable", False)
+SENDER_EMAIL = CONFIG_SMTP.get("sender_email", "")
+SENDER_PASSWORD = CONFIG_SMTP.get("sender_password", "")
+RECEIVER_EMAIL = CONFIG_SMTP.get("receiver_email", "")
+SMTP_SERVER = CONFIG_SMTP.get("smtp_server", "")
+SMTP_SSL = CONFIG_SMTP.get("smtp_ssl", "")
+SMTP_PORT = CONFIG_SMTP.get("smtp_port", "")
+
+
+### 日志模块
+def log():
+    global logger
+    # 检查是否已经配置了处理器
+    if logging.getLogger().handlers:
+        return logging.getLogger()
+
+    # 获取目录
+    logs_dir = os.path.join(root_dir, "logs")
+    Path(logs_dir).mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+
+    # 日志格式
+    log_formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(processName)s - %(message)s"
+    )
+
+    # 日志名称和后缀
+    current_date = datetime.now().strftime("%Y%m%d")
+    log_file_name = f"api{current_date}.log"
+    log_file_path = os.path.join(logs_dir, log_file_name)
+
+    # 创建日志文件处理器,每天分割日志文件
+    log_file_handler = TimedRotatingFileHandler(
+        log_file_path,
+        when="midnight",
+        interval=1,
+        backupCount=30,
+        encoding="utf-8",
+    )
+    log_file_handler.setFormatter(log_formatter)
+
+    # 创建并配置 logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(log_file_handler)
+
+    return logger
+
+logger = log()
+
+
+# 合并日志与打印信息
+def log_and_print(message, prefix="", level="INFO"):
+    if isinstance(level, str):
+        level = getattr(logging, level.upper(), logging.INFO)
+    
+    # 获取全局日志记录器
+    logger = logging.getLogger()
+    
+    # 记录日志
+    logger.log(level, message)
+    
+    # 打印信息
+    print(prefix + message)
+
+
+# BA认证函数
+def basic_auth(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
     correct_username = secrets.compare_digest(credentials.username, api_username)
     correct_password = secrets.compare_digest(credentials.password, api_password)
     if not (correct_username and correct_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="账号或密码不正确",
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials
 
+
+app = FastAPI()
 
 # 静态文件目录
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -138,19 +165,20 @@ if api_status_enable:
     async def api_status_page():
         return FileResponse("static/api_status.html")
 
+
 # 邮件发送
 # 使用方式 send_email("标题", "内容")
 def send_email(subject, body):
     if not SMTP_ENABLE:
-        log.debug("[邮件] SMTP 功能已禁用。")
+        logger.debug("[邮件] SMTP 功能已禁用。")
         return
 
     # 构建邮件
     msg = MIMEMultipart()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = RECEIVER_EMAIL
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain'))
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECEIVER_EMAIL
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
     # 连接SMTP服务器并发送邮件
     try:
@@ -159,12 +187,13 @@ def send_email(subject, body):
         else:
             server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        log.debug("[邮件] 邮件登录成功")
+        logger.debug("[邮件] 邮件登录成功")
         server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
-        log.info("[邮件] 邮件发送成功")
+        logger.debug("[邮件] 邮件发送成功")
         server.quit()
     except Exception as e:
-        log.error(f"[邮件] 邮件发送失败: {e}")
+        logger.error(f"[邮件] 邮件发送失败: {e}")
+
 
 # 异步 接口检查请求
 async def check_interface_health_async(
@@ -174,7 +203,7 @@ async def check_interface_health_async(
 ) -> bool:
     global INTERFACE_HEALTH_DATA
     request_url = f"{url}/room/v1/Room/playUrl?cid=3&qn=10000&platform=web"
-    headers = {"User-Agent": USER_AGENT}
+    headers = {"Accept-Encoding": "gzip, deflate, br", "User-Agent": USER_AGENT}
     for _ in range(max_retries):
         try:
             INTERFACE_HEALTH_DATA[url]["total"] += 1
@@ -184,10 +213,10 @@ async def check_interface_health_async(
                 INTERFACE_HEALTH_DATA[url]["total_success"] += 1
                 return True
         except httpx.HTTPError as http_err:
-            # log.error(f"Error: check_interface_health_async: {url}")
+            # logger.error(f"Error: check_interface_health_async: {url}")
             pass
         except Exception as Error:
-            # log.error(f"Error: {Error}")
+            # logger.error(f"Error: {Error}")
             pass
         await asyncio.sleep(retry_interval)
 
@@ -206,15 +235,18 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
             data = response.json()
             return data["code"] == 0, data, cookie_str, csrf
         except Exception as e:
-            log.error(f"[检查] 检查 Cookie 时出错: {e}")
+            logger.error(f"[状态] 检查 Cookie 时出错: {e}")
+            log_and_print(f"[状态] 检查 Cookie 时出错: {e}' 无效了", "ERROR:     ", "ERROR")
             return False, None, None, None
 
     is_logged_in, _, _, _ = is_login(cookie)
     if is_logged_in:
         return True
     else:
-        log.warning(f"[检查] Cookie '{cookie_name}' 无效了")
-        send_email("[检查] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。")
+        log_and_print(f"[状态] Cookie '{cookie_name}' 无效了", "WARN:     ", "WARNING")
+        send_email(
+            "[状态] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。"
+        )
         return False
 
 
@@ -259,13 +291,13 @@ async def interface_health_check_task():
                 if status["is_healthy"]
             ]
 
-        log.info(
-            "[检查] 当前健康接口数: "
-            + ", ".join(
-                f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()
-            )
-        )
-        await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
+        log_and_print("[状态] 当前健康接口数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()),"INFO:     ", "INFO")
+
+        try:
+            await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
+        except asyncio.CancelledError:
+            logger.debug("接口健康检查任务被取消")
+            break
 
 
 # 异步 执行Cookie的健康检查并管理
@@ -279,23 +311,27 @@ async def cookie_health_check_task():
                     healthy_cookies.append(cookie_data["cookie"])
 
         HEALTH_COOKIESTR_POOL = healthy_cookies
-        log.info(f"[检查] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}")
-        await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
+        log_and_print(f"[状态] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}","INFO:     ", "INFO")
+
+        try:
+            await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
+        except asyncio.CancelledError:
+            logger.debug("Cookie健康检查任务被取消")
+            break
 
 
 # 启动健康检查协程
 async def start_health_check_coroutines():
-    log.info("程序已启动, 开始进行 API&Cookie 健康检查")
     await asyncio.gather(interface_health_check_task(), cookie_health_check_task())
 
 
 # 代理请求的接口
-@app.get("/api_live/use_cookie/{pool_name}/{path:path}")
+@app.get("/use_cookie/{pool_name}/{path:path}")
 async def api_live(pool_name: str, path: str, request: Request):
     return await handle_proxy_request(pool_name, path, request, use_cookie=True)
 
 
-@app.get("/api_live/no_cookie/{pool_name}/{path:path}")
+@app.get("/no_cookie/{pool_name}/{path:path}")
 async def api_live_no_cookie(pool_name: str, path: str, request: Request):
     return await handle_proxy_request(pool_name, path, request, use_cookie=False)
 
@@ -315,7 +351,7 @@ async def handle_proxy_request(
         assert False, "Oops!"
 
     if pool_name not in HEALTH_INTERFACE_POOLS:
-        raise HTTPException(status_code=404, detail="Pool not found")
+        raise HTTPException(status_code=404, detail="不存在代理池")
 
     update_request_stats(pool_name)
 
@@ -329,9 +365,9 @@ async def handle_proxy_request(
     # chosen_cookie = random.choice(HEALTH_COOKIESTR_POOL) if HEALTH_COOKIESTR_POOL else None
 
     if not target_url:
-        log.warning("[请求] 没有可用的健康接口")
+        log_and_print("[请求] 没有可用的健康接口' 无效了", "WARN:     ", "WARNING")
         send_email("[请求] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
-        raise HTTPException(status_code=400, detail="No healthy interfaces available")
+        raise HTTPException(status_code=400, detail="没有可用的健康接口")
 
     method = request.method
     headers = dict(request.headers)
@@ -350,7 +386,7 @@ async def handle_proxy_request(
             if weighted_healthy_cookies
             else None
         )
-        log.debug(f"[请求] 选择Cookie: {chosen_cookie}")
+        logger.debug(f"[请求] 选择Cookie: {chosen_cookie}")
         if chosen_cookie:
             headers.pop("cookie", None)
             headers.pop("host", None)
@@ -358,16 +394,18 @@ async def handle_proxy_request(
         else:
             headers.pop("host", None)
             headers["Cookie"] = ""
-            log.warning("[请求] 没有配置 Cookie 或 Cookie 已过期")
+            log_and_print("[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING")
             send_email("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
     else:
         headers.pop("cookie", None)
         headers.pop("host", None)
         headers["Cookie"] = ""
 
+    headers["Accept-Encoding"] = "gzip, deflate, br"
+
     async with httpx.AsyncClient() as client:
         try:
-            log.info(f"Request: {target_url}/{path}")
+            logger.info(f"Request: {target_url}/{path}")
             response = await client.request(
                 method,
                 f"{target_url}/{path}",
@@ -381,7 +419,8 @@ async def handle_proxy_request(
     try:
         data = json.loads(response.content.decode("utf-8", "ignore"))
     except json.JSONDecodeError:
-        log.error("JSON解析错误")
+        logger.error("JSON解析错误")
+        print(response.content)
         raise HTTPException(status_code=500, detail="Invalid JSON response")
     return liveStreamProcess(data)
 
@@ -391,7 +430,11 @@ def liveStreamProcess(date_json):
     return date_json
 
 
-### 监控相关
+### API相关
+## 配置相关
+
+
+## 监控相关
 # 初始化 request_data
 REQUEST_DATA = {
     pool_name: {
@@ -435,9 +478,19 @@ def update_request_stats(pool_name):
         data["recent_requests_timestamps"].append(now)
 
 
+# 当前总体健康情况
+@app.get("/api/status")
+async def health_status_number():
+    request_status = {pool: len(urls) for pool, urls in HEALTH_INTERFACE_POOLS.items()}
+    return {
+        "request_status": request_status,
+        "cookie_status": len(HEALTH_COOKIESTR_POOL),
+    }
+
+
 # 返回各个 反代API池 的调用次数和总调用次数
-@app.get("/api_status/request_pools_count")
-async def request_pools_count():
+@app.get("/api/status/request")
+async def request():
     # request_data 总体频率计算
     def calculate_total_frequency(pool_name):
         data = REQUEST_DATA[pool_name]
@@ -462,10 +515,10 @@ async def request_pools_count():
 
 
 # 查询各个 反代API 健康率
-@app.get("/api_status/request_health_data")
-async def request_health_count(request: Request):
+@app.get("/api/status/api/health")
+async def api_health(request: Request):
     auth_key = request.headers.get("Authorization")
-    if auth_key != SECRET_KEY:
+    if auth_key != API_KEY:
         raise HTTPException(status_code=401, detail="未授权")
     health_data = []
     for url, data in INTERFACE_HEALTH_DATA.items():
@@ -477,10 +530,10 @@ async def request_health_count(request: Request):
 
 
 # 查询各个 Cookie 健康情况
-@app.get("/api_status/cookie_health_data")
-async def cookie_health_count(request: Request):
+@app.get("/api/status/cookie/health")
+async def cookie_health(request: Request):
     auth_key = request.headers.get("Authorization")
-    if auth_key != SECRET_KEY:
+    if auth_key != API_KEY:
         raise HTTPException(status_code=401, detail="未授权")
 
     health_cookie = []
@@ -505,26 +558,22 @@ async def cookie_health_count(request: Request):
             no_health_cookie.extend(user_no_health_cookies)
 
         except Exception as Error:
-            log.error(f"health_count: Error: {Error}")
-            log.error(f"Problematic cookie: {user}")
+            logger.error(f"health_count: Error: {Error}")
+            logger.error(f"Problematic cookie: {user}")
 
     return {"health_cookie": health_cookie, "no_health_cookie": no_health_cookie}
 
 
-# 当前总体健康情况
-@app.get("/api_status/health_status_number")
-async def health_status_number():
-    request_status = {pool: len(urls) for pool, urls in HEALTH_INTERFACE_POOLS.items()}
-    return {
-        "request_status": request_status,
-        "cookie_status": len(HEALTH_COOKIESTR_POOL),
-    }
-
-
 ### 主线程启动
+# 监听应用程序的 shutdown 事件
+@app.on_event("shutdown")
+async def shutdown():
+    logger.info("程序关闭")
+    
 # 启动时事件处理
 @app.on_event("startup")
 async def on_startup():
+    log_and_print("程序已启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
     # 健康检查
     asyncio.create_task(start_health_check_coroutines())
     # 接口数据清理
