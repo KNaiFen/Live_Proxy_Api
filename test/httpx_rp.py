@@ -1,13 +1,10 @@
 import httpx
+from fastapi import FastAPI, Request, Response, HTTPException
 
-from http import HTTPStatus
+app = FastAPI()
 
-from starlette.applications import Starlette
-from starlette.responses import Response
-
-app = Starlette()
-
-async def proxy_app(request) -> Response:
+@app.get("/{path:path}")
+async def proxy_app(request: Request) -> Response:
     full_path = request.url.path
     url = f"https://api.live.bilibili.com/{full_path}"
     
@@ -21,9 +18,7 @@ async def proxy_app(request) -> Response:
             response = await client.get(url, headers=headers, params=request.query_params)
             return Response(content=response.content, status_code=response.status_code, headers=response.headers)
     except Exception as e:
-        return Response(content=str(e), status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
-
-app.add_route("/{path:path}", proxy_app, methods=["GET"])
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

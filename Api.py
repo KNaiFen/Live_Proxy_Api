@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, Depends, status
+from fastapi import FastAPI, Request, HTTPException, Depends, status, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +14,7 @@ import uvicorn
 import requests
 import re
 import asyncio
-import json
+from http import HTTPStatus
 import yaml
 import smtplib
 from email.mime.text import MIMEText
@@ -120,7 +120,6 @@ def log():
 
     return logger
 
-
 logger = log()
 
 
@@ -128,14 +127,10 @@ logger = log()
 def log_and_print(message, prefix="", level="INFO"):
     if isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
-
-    # 获取全局日志记录器
+    # 日志
     logger = logging.getLogger()
-
-    # 记录日志
     logger.log(level, message)
-
-    # 打印信息
+    # 打印
     print(prefix + message)
 
 
@@ -350,9 +345,7 @@ async def api_live_no_cookie(pool_name: str, path: str, request: Request):
 
 
 # 代理请求的通用函数
-async def handle_proxy_request(
-    pool_name: str, path: str, request: Request, use_cookie: bool
-):
+async def handle_proxy_request(pool_name: str, path: str, request: Request, use_cookie: bool) -> Response:
     def weighted_choice(choices):
         total = sum(weight for _, weight in choices)
         r = random.uniform(0, total)
@@ -375,17 +368,16 @@ async def handle_proxy_request(
         if url["url"] in HEALTH_INTERFACE_POOLS[pool_name]
     ]
     target_url = weighted_choice(weighted_urls) if weighted_urls else None
-    # chosen_cookie = random.choice(HEALTH_COOKIESTR_POOL) if HEALTH_COOKIESTR_POOL else None
-
     if not target_url:
         log_and_print("[请求] 没有可用的健康接口' 无效了", "WARN:     ", "WARNING")
         send_email("[请求] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
         raise HTTPException(status_code=400, detail="没有可用的健康接口")
 
     method = request.method
-    headers = dict(request.headers)
-    query_params = request.query_params
-    body = await request.body()
+    headers = {k[5:].replace('_', '-').title(): v for k, v in request.headers.items() if k.startswith('HTTP_')}
+    headers.pop('Host', None)
+    headers.pop('Accept-Encoding', None)
+    headers['User-Agent'] = USER_AGENT
 
     if use_cookie:
         weighted_healthy_cookies = [
@@ -401,42 +393,30 @@ async def handle_proxy_request(
         )
         logger.debug(f"[请求] 选择Cookie: {chosen_cookie}")
         if chosen_cookie:
-            headers.pop("cookie", None)
-            headers.pop("host", None)
-            headers["Cookie"] = chosen_cookie
+            headers.pop('Cookie', None)
+            headers['Cookie'] = chosen_cookie
         else:
-            headers.pop("host", None)
-            headers["Cookie"] = ""
-            log_and_print(
-                "[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING"
-            )
+            headers.pop('Cookie', None)
+            log_and_print("[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING")
             send_email("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
     else:
-        headers.pop("cookie", None)
-        headers.pop("host", None)
-        headers["Cookie"] = ""
+        headers.pop('Cookie', None)
 
-    async with httpx.AsyncClient() as client:
-        try:
-            logger.info(f"Request: {target_url}/{path}")
+    url = f"{target_url}/{path}"
+    try:
+        async with httpx.AsyncClient() as client:
             response = await client.request(
                 method,
-                f"{target_url}/{path}",
+                url,
                 headers=headers,
-                params=query_params,
-                content=body,
+                params=request.query_params,
+                content=await request.body(),
             )
-        except httpx.HTTPError as http_err:
-            return {"Error": str(http_err)}
-
-    try:
-        data = json.loads(response.content.decode("utf-8", "ignore"))
-    except json.JSONDecodeError:
-        log_and_print("JSON解析错误", "ERROR:     ", "ERROR")
-        log_and_print(f"请求数据: {response.content}", "ERROR:     ", "ERROR")
-        raise HTTPException(status_code=500, detail="无效的JSON请求")
-    return liveStreamProcess(data)
-
+            return Response(content=response.content, status_code=response.status_code, headers=response.headers)
+    except httpx.HTTPError as http_err:
+        raise HTTPException(status_code=http_err.response.status_code, detail=str(http_err))
+    except Exception as e:
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
 
 # 对请求返回的结果进行加工处理
 def liveStreamProcess(date_json):
