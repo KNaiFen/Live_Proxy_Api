@@ -418,7 +418,7 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
     except Exception as e:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
 
-# 对请求返回的结果进行加工处理
+# 对请求返回的结果进行加工处理 (强制原画、优选cdn(未来可期))
 def liveStreamProcess(date_json):
     return date_json
 
@@ -525,53 +525,41 @@ async def api_health(request: Request):
 # 查询各个 Cookie 健康情况
 @app.get("/api/status/cookie/health")
 async def cookie_health(request: Request):
-    auth_key = request.headers.get("Authorization")
-    if auth_key != API_KEY:
-        raise HTTPException(status_code=401, detail="未授权")
+    health_info = []
 
-    health_cookie = []
-    no_health_cookie = []
     for user, cookie_data in ORIGINAL_COOKIESTR_POOL.items():
         try:
-            user_health_cookies = []
-            user_no_health_cookies = []
+            user_health_status = any(
+                cookie_item["cookie"] in HEALTH_COOKIESTR_POOL for cookie_item in cookie_data
+            )
 
-            # 检查每个用户的 cookie 是否在健康池中
-            for cookie_item in cookie_data:
-                if cookie_item["cookie"] in HEALTH_COOKIESTR_POOL:
-                    user_health_cookies.append(
-                        {"id": user, "cookie": cookie_item["cookie"]}
-                    )
-                else:
-                    user_no_health_cookies.append(
-                        {"id": user, "cookie": cookie_item["cookie"]}
-                    )
-
-            health_cookie.extend(user_health_cookies)
-            no_health_cookie.extend(user_no_health_cookies)
+            health_info.append({"id": user, "healthy": user_health_status})
 
         except Exception as Error:
             logger.error(f"health_count: Error: {Error}")
             logger.error(f"Problematic cookie: {user}")
 
-    return {"health_cookie": health_cookie, "no_health_cookie": no_health_cookie}
+    return health_info
+
 
 
 ### 主线程启动
-# 监听应用程序的 shutdown 事件
-@app.on_event("shutdown")
-async def shutdown():
-    logger.info("程序关闭")
-
-
 # 启动时事件处理
 @app.on_event("startup")
 async def on_startup():
-    log_and_print("程序已启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
-    # 健康检查
-    asyncio.create_task(start_health_check_coroutines())
-    # 接口数据清理
-    asyncio.create_task(cleanup_old_stats())
+    async def start():
+        log_and_print("程序已启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
+        # 健康检查
+        asyncio.create_task(start_health_check_coroutines())
+        # 接口数据清理
+        asyncio.create_task(cleanup_old_stats())
+
+    await start()
+
+# 程序关闭
+@app.on_event("shutdown")
+async def shutdown():
+    logger.info("程序关闭")
 
 
 if __name__ == "__main__":

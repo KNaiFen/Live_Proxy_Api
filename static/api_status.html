@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh">
 
-<head>
-    <meta charset="UTF-8">
-    <title>API 状态</title>
-    <style>
+    <head>
+        <meta charset="UTF-8">
+        <title>API 状态</title>
+        <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -49,27 +49,27 @@
             text-align: left;
         }
     </style>
-</head>
+    </head>
 
-<body>
-    <div class="container">
-        <h1>API 状态</h1>
-        <div>
-            <label for="secretKey">密钥: </label>
-            <input type="password" id="secretKey" placeholder="输入密钥">
-            <button onclick="saveSecretKey()">确认</button>
-            <label><input type="checkbox" id="rememberMe"> 记住密钥</label>
+    <body>
+        <div class="container">
+            <h1>API 状态</h1>
+            <div>
+                <label for="secretKey">密钥: </label>
+                <input type="password" id="secretKey" placeholder="输入密钥">
+                <button onclick="saveSecretKey()">确认</button>
+                <label><input type="checkbox" id="rememberMe"> 记住密钥</label>
+            </div>
+            <button onclick="queryRequestPoolsCount()">查询反代API池状态</button>
+            <button onclick="queryRequestHealthCount()">查询反代API健康率</button>
+            <button onclick="queryCookieHealthCount()">查询Cookie健康情况</button>
+            <button onclick="queryHealthStatusNumber()">查询当前总体健康情况</button>
+
+            <div id="output"></div>
         </div>
-        <button onclick="queryRequestPoolsCount()">查询反代API池状态</button>
-        <button onclick="queryRequestHealthCount()">查询反代API健康率</button>
-        <button onclick="queryCookieHealthCount()">查询Cookie健康情况</button>
-        <button onclick="queryHealthStatusNumber()">查询当前总体健康情况</button>
 
-        <div id="output"></div>
-    </div>
-
-    <script>
-        const baseApiUrl = window.location.origin + '/api_status';
+        <script>
+        const baseApiUrl = window.location.origin;
         let secretKey = '';
 
         window.onload = function () {
@@ -114,14 +114,20 @@
             setCookie(name, "", -1);
         }
 
+        async function queryHealthStatusNumber() {
+            const response = await fetch(`${baseApiUrl}/api/status`);
+            const data = await response.json();
+            displayData(data, '当前总体健康情况');
+        }
+
         async function queryRequestPoolsCount() {
-            const response = await fetch(`${baseApiUrl}/request_pools_count`);
+            const response = await fetch(`${baseApiUrl}/api/status/request`);
             const data = await response.json();
             displayData(data, '反代API池状态');
         }
 
         async function queryRequestHealthCount() {
-            const response = await fetch(`${baseApiUrl}/request_health_data`, {
+            const response = await fetch(`${baseApiUrl}/api/status/api/health`, {
                 headers: { 'Authorization': secretKey }
             });
             const data = await response.json();
@@ -129,17 +135,11 @@
         }
 
         async function queryCookieHealthCount() {
-            const response = await fetch(`${baseApiUrl}/cookie_health_data`, {
+            const response = await fetch(`${baseApiUrl}/api/status/cookie/health`, {
                 headers: { 'Authorization': secretKey }
             });
             const data = await response.json();
             displayData(data, 'Cookie健康情况');
-        }
-
-        async function queryHealthStatusNumber() {
-            const response = await fetch(`${baseApiUrl}/health_status_number`);
-            const data = await response.json();
-            displayData(data, '当前总体健康情况');
         }
 
         function displayData(data, title) {
@@ -149,6 +149,6 @@
         }
     </script>
 
-</body>
+    </body>
 
 </html>
