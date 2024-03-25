@@ -51,7 +51,7 @@ api_status_enable = api_status_config.get("enable", False)
 api_username = api_status_config.get("username", "admin")
 api_password = api_status_config.get("password", "admin")
 
-# 接口的认证密匙
+# API的认证密匙
 API_KEY = config.get("API_KEY")
 if not API_KEY:
     raise ValueError("[配置] API_KEY 不允许为空，请检查配置文件.")
@@ -70,7 +70,7 @@ DEFAULT_RETRY_INTERVAL = CONFIG_HC.get("API", {}).get("MAX_RETRY_INTERVAL", 10)
 # Cookie健康检查间隔(秒)，默认3600秒
 COOKIE_HEALTH_CHECK_INTERVAL = CONFIG_HC.get("COOKIE", {}).get("INTERVAL", 1 * 3600)
 
-## 接口与Cookie池
+## API与Cookie池
 INTERFACE_POOLS = config["INTERFACE_POOLS"]
 ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
@@ -208,10 +208,8 @@ async def webhook(event_data: dict, event_type: str):
             "EventData": event_data
         }
 
-        print("Webhook 信息:", payload)
-
         # 发送 Webhook 请求
-        response = requests.post(webhook_host + "/", json=payload, headers=headers)
+        response = requests.post(webhook_host, json=payload, headers=headers)
         response.raise_for_status()
         return {"message": "Webhook 请求已成功发送"}
     except requests.RequestException as req_error:
@@ -223,7 +221,7 @@ async def webhook(event_data: dict, event_type: str):
 
 
 
-# 异步 接口检查请求
+# 异步 API检查请求
 async def check_interface_health_async(
     url: str,
     max_retries: int = DEFAULT_MAX_RETRIES,
@@ -273,10 +271,10 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
     else:
         log_and_print(f"[状态] Cookie '{cookie_name}' 无效了", "WARN:     ", "WARNING")
         smtp("[状态] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。")
-        await webhook({"message": f"Cookie '{cookie_name}' 无效了，请及时处理。"}, "CookieExpiry")
+        await webhook({"message": f"[状态] Cookie '{cookie_name}' 无效了，请及时处理。"}, "ExpiryCookie")
         return False
 
-# 异步 接口健康检查
+# 异步 API健康检查
 async def interface_health_check_task():
     global HEALTH_INTERFACE_POOLS
     interface_health_status = {}
@@ -318,18 +316,16 @@ async def interface_health_check_task():
             ]
 
         log_and_print(
-            "[状态] 当前健康接口数: "
-            + ", ".join(
-                f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()
-            ),
+            "[状态] 当前健康 API 数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()),
             "INFO:     ",
             "INFO",
         )
+        await webhook({"message": "[状态] 当前健康 API 数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items())}, "HealthAPI")
 
         try:
             await asyncio.sleep(INTERFACE_HEALTH_CHECK_INTERVAL)
         except asyncio.CancelledError:
-            logger.debug("接口健康检查任务被取消")
+            logger.debug("API健康检查任务被取消")
             break
 
 # 异步 执行Cookie的健康检查并管理
@@ -348,6 +344,8 @@ async def cookie_health_check_task():
             "INFO:     ",
             "INFO",
         )
+        await webhook({"message": f"[状态] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}"}, "HealthCookie")
+
 
         try:
             await asyncio.sleep(COOKIE_HEALTH_CHECK_INTERVAL)
@@ -386,9 +384,10 @@ async def handle_proxy_request(
     ]
     target_url = weighted_choice(weighted_urls) if weighted_urls else None
     if not target_url:
-        log_and_print("[请求] 没有可用的健康接口' 无效了", "WARN:     ", "WARNING")
-        smtp("[请求] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
-        raise HTTPException(status_code=400, detail="没有可用的健康接口")
+        log_and_print("[请求] 没有可用的健康API", "WARN:     ", "WARNING")
+        smtp("[请求] 没有可用的健康API", "没有可用的健康API，请及时处理。")
+        await webhook({"message": f"[请求] 没有可用的健康API"}, "ExpiryAPI")
+        raise HTTPException(status_code=400, detail="没有可用的健康API")
 
     method = request.method
     headers = {
@@ -422,6 +421,7 @@ async def handle_proxy_request(
                 "[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING"
             )
             smtp("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
+            await webhook({"message": f"[请求] 没有配置 Cookie 或 Cookie 已过期"}, "ErrorCookie")
     else:
         headers.pop("Cookie", None)
 
@@ -452,7 +452,7 @@ def liveStreamProcess(date_json):
     return date_json
 
 
-# 代理请求的接口
+# 代理请求的API
 @app.get("/use_cookie/{pool_name}/{path:path}")
 async def api_live(pool_name: str, path: str, request: Request):
     return await handle_proxy_request(pool_name, path, request, use_cookie=True)
@@ -519,7 +519,7 @@ REQUEST_DATA = {
     for pool_name in config["INTERFACE_POOLS"]
 }
 
-# 初始化接口健康数据
+# 初始化API健康数据
 INTERFACE_HEALTH_DATA = {
     item["url"]: {"total": 0, "total_success": 0}
     for pool in config["INTERFACE_POOLS"].values()
@@ -626,7 +626,7 @@ async def on_startup():
         log_and_print("程序启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
         # 健康检查
         asyncio.create_task(start_health_check_coroutines())
-        # 接口数据清理
+        # API数据清理
         asyncio.create_task(cleanup_old_stats())
         # 测试 SMTP 功能是否可用
         await smtp_start_test()

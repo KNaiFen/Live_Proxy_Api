@@ -72,3 +72,6 @@ SMTP:
   smtp_ssl: True
   # (必要)SMTP端口
   smtp_port: 465
+
+# (可选)WEBHOOK推送，默认为空
+WEBHOOKHOST: http://127.0.0.1:8101/webhook/
