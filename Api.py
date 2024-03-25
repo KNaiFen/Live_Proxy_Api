@@ -6,6 +6,7 @@ import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
+import uuid
 import logging
 import httpx
 import random
@@ -24,6 +25,12 @@ from email.utils import formatdate
 
 # 根路径
 root_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 定义fastapi路由
+app = FastAPI()
+
+# 静态文件目录
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 ### 配置部分
 ## 读取配置文件
@@ -69,7 +76,7 @@ ORIGINAL_COOKIESTR_POOL = config["COOKIESTR_POOL"]
 HEALTH_INTERFACE_POOLS = {pool_name: [] for pool_name in INTERFACE_POOLS}
 HEALTH_COOKIESTR_POOL = []
 
-## 邮件配置
+## SMTP配置
 CONFIG_SMTP = config.get("SMTP", {})
 SMTP_ENABLE = CONFIG_SMTP.get("enable", False)
 SENDER_EMAIL = CONFIG_SMTP.get("sender_email", "")
@@ -79,6 +86,7 @@ SMTP_SERVER = CONFIG_SMTP.get("smtp_server", "")
 SMTP_SSL = CONFIG_SMTP.get("smtp_ssl", "")
 SMTP_PORT = CONFIG_SMTP.get("smtp_port", "")
 
+webhook_host = config.get("WEBHOOKHOST", "")
 
 ### 日志模块
 def log():
@@ -122,7 +130,6 @@ def log():
 
 logger = log()
 
-
 # 合并日志与打印信息
 def log_and_print(message, prefix="", level="INFO"):
     if isinstance(level, str):
@@ -133,39 +140,14 @@ def log_and_print(message, prefix="", level="INFO"):
     # 打印
     print(prefix + message)
 
-
-# BA认证函数
-def basic_auth(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
-    correct_username = secrets.compare_digest(credentials.username, api_username)
-    correct_password = secrets.compare_digest(credentials.password, api_password)
-    if not (correct_username and correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="账号或密码不正确",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials
-
-
-app = FastAPI()
-
-# 静态文件目录
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-# api状态页
-if api_status_enable:
-
-    @app.get("/api_status", dependencies=[Depends(basic_auth)])
-    async def api_status_page():
-        return FileResponse("static/api_status.html")
-
-
+### 通知相关
 ## SMTP
-# 使用方式 send_email("标题", "内容")
-def send_email(subject, body):
+'''
+调用 
+smtp("标题", "内容")
+'''
+def smtp(subject, body):
     if not SMTP_ENABLE:
-        logger.debug("[邮件] SMTP 功能已禁用。")
         return
 
     # 构建邮件
@@ -182,12 +164,63 @@ def send_email(subject, body):
         else:
             server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        logger.debug("[邮件] 邮件登录成功")
         server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
-        logger.debug("[邮件] 邮件发送成功")
+        logger.debug("[SMTP] 邮件发送成功")
         server.quit()
     except Exception as e:
-        log_and_print("[邮件] 邮件发送失败: {e}' 无效了", "ERROR:     ", "ERROR")
+        log_and_print(f"[SMTP] 邮件发送失败: {e}", "ERROR:     ", "ERROR")
+
+# SMTP 启动测试
+async def smtp_start_test():
+    if SMTP_ENABLE:
+        try:
+            if SMTP_SSL:
+                server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=5)
+            else:
+                server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=5)
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            log_and_print("[SMTP] 邮件通知功能已启用", "INFO:     ", "INFO")
+            log_and_print("[SMTP] 邮箱登录成功", "INFO:     ", "INFO")
+            server.quit()
+        except Exception as e:
+            log_and_print(f"[SMTP] 邮箱登录失败: {e}", "ERROR:     ", "ERROR")
+    else:
+        logger.debug("[SMTP] 邮件通知功能禁用")
+
+
+## WEBHOOK
+'''
+调用
+webhook({"message": "事件data"}, "事件类型")
+'''
+async def webhook(event_data: dict, event_type: str):
+    try:
+        if not webhook_host:
+            return {"message": "Webhook 功能未启用"}
+
+        headers = {"Content-Type": "application/json", "User-Agent": "API_COOKIE_LB"}
+
+        # 构建 Webhook 请求数据
+        payload = {
+            "EventType": event_type,
+            "EventTimestamp": str(datetime.now()),
+            "EventId": str(uuid.uuid4()),
+            "EventData": event_data
+        }
+
+        print("Webhook 信息:", payload)
+
+        # 发送 Webhook 请求
+        response = requests.post(webhook_host + "/", json=payload, headers=headers)
+        response.raise_for_status()
+        return {"message": "Webhook 请求已成功发送"}
+    except requests.RequestException as req_error:
+        logger.error(f"无法发送 Webhook 请求: {req_error}")
+        return {"error": f"无法发送 Webhook 请求: {req_error}"}
+    except Exception as e:
+        logger.error(f"发生未知错误: {e}")
+        return {"error": f"发生未知错误: {e}"}
+
 
 
 # 异步 接口检查请求
@@ -217,7 +250,6 @@ async def check_interface_health_async(
 
     return False
 
-
 # 异步 Cookie健康检查
 async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
     def is_login(cookie_str: str):
@@ -230,7 +262,6 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
             data = response.json()
             return data["code"] == 0, data, cookie_str, csrf
         except Exception as e:
-            logger.error(f"[状态] 检查 Cookie 时出错: {e}")
             log_and_print(
                 f"[状态] 检查 Cookie 时出错: {e}' 无效了", "ERROR:     ", "ERROR"
             )
@@ -241,11 +272,9 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
         return True
     else:
         log_and_print(f"[状态] Cookie '{cookie_name}' 无效了", "WARN:     ", "WARNING")
-        send_email(
-            "[状态] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。"
-        )
+        smtp("[状态] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。")
+        await webhook({"message": f"Cookie '{cookie_name}' 无效了，请及时处理。"}, "CookieExpiry")
         return False
-
 
 # 异步 接口健康检查
 async def interface_health_check_task():
@@ -303,7 +332,6 @@ async def interface_health_check_task():
             logger.debug("接口健康检查任务被取消")
             break
 
-
 # 异步 执行Cookie的健康检查并管理
 async def cookie_health_check_task():
     global HEALTH_COOKIESTR_POOL
@@ -327,25 +355,14 @@ async def cookie_health_check_task():
             logger.debug("Cookie健康检查任务被取消")
             break
 
-
 # 启动健康检查协程
 async def start_health_check_coroutines():
     await asyncio.gather(interface_health_check_task(), cookie_health_check_task())
 
-
-# 代理请求的接口
-@app.get("/use_cookie/{pool_name}/{path:path}")
-async def api_live(pool_name: str, path: str, request: Request):
-    return await handle_proxy_request(pool_name, path, request, use_cookie=True)
-
-
-@app.get("/no_cookie/{pool_name}/{path:path}")
-async def api_live_no_cookie(pool_name: str, path: str, request: Request):
-    return await handle_proxy_request(pool_name, path, request, use_cookie=False)
-
-
 # 代理请求的通用函数
-async def handle_proxy_request(pool_name: str, path: str, request: Request, use_cookie: bool) -> Response:
+async def handle_proxy_request(
+    pool_name: str, path: str, request: Request, use_cookie: bool
+) -> Response:
     def weighted_choice(choices):
         total = sum(weight for _, weight in choices)
         r = random.uniform(0, total)
@@ -370,14 +387,18 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
     target_url = weighted_choice(weighted_urls) if weighted_urls else None
     if not target_url:
         log_and_print("[请求] 没有可用的健康接口' 无效了", "WARN:     ", "WARNING")
-        send_email("[请求] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
+        smtp("[请求] 没有可用的健康接口", "没有可用的健康接口，请及时处理。")
         raise HTTPException(status_code=400, detail="没有可用的健康接口")
 
     method = request.method
-    headers = {k[5:].replace('_', '-').title(): v for k, v in request.headers.items() if k.startswith('HTTP_')}
-    headers.pop('Host', None)
-    headers.pop('Accept-Encoding', None)
-    headers['User-Agent'] = USER_AGENT
+    headers = {
+        k[5:].replace("_", "-").title(): v
+        for k, v in request.headers.items()
+        if k.startswith("HTTP_")
+    }
+    headers.pop("Host", None)
+    headers.pop("Accept-Encoding", None)
+    headers["User-Agent"] = USER_AGENT
 
     if use_cookie:
         weighted_healthy_cookies = [
@@ -393,14 +414,16 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
         )
         logger.debug(f"[请求] 选择Cookie: {chosen_cookie}")
         if chosen_cookie:
-            headers.pop('Cookie', None)
-            headers['Cookie'] = chosen_cookie
+            headers.pop("Cookie", None)
+            headers["Cookie"] = chosen_cookie
         else:
-            headers.pop('Cookie', None)
-            log_and_print("[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING")
-            send_email("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
+            headers.pop("Cookie", None)
+            log_and_print(
+                "[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING"
+            )
+            smtp("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
     else:
-        headers.pop('Cookie', None)
+        headers.pop("Cookie", None)
 
     url = f"{target_url}/{path}"
     try:
@@ -412,9 +435,15 @@ async def handle_proxy_request(pool_name: str, path: str, request: Request, use_
                 params=request.query_params,
                 content=await request.body(),
             )
-            return Response(content=response.content, status_code=response.status_code, headers=response.headers)
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=response.headers,
+            )
     except httpx.HTTPError as http_err:
-        raise HTTPException(status_code=http_err.response.status_code, detail=str(http_err))
+        raise HTTPException(
+            status_code=http_err.response.status_code, detail=str(http_err)
+        )
     except Exception as e:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -423,11 +452,62 @@ def liveStreamProcess(date_json):
     return date_json
 
 
+# 代理请求的接口
+@app.get("/use_cookie/{pool_name}/{path:path}")
+async def api_live(pool_name: str, path: str, request: Request):
+    return await handle_proxy_request(pool_name, path, request, use_cookie=True)
+
+@app.get("/no_cookie/{pool_name}/{path:path}")
+async def api_live_no_cookie(pool_name: str, path: str, request: Request):
+    return await handle_proxy_request(pool_name, path, request, use_cookie=False)
+
+
 ### API相关
 ## 配置相关
 
+## 测试相关
+# 邮件发送测试
+@app.get("/api/smtp/test")
+async def api_smtp_test(request: Request):
+    auth_key = request.headers.get("Authorization")
+    if auth_key != API_KEY:
+        raise HTTPException(status_code=401, detail="未授权")
+    
+    if not SMTP_ENABLE:
+        return {"error": "SMTP 功能未启用"}
+        
+    subject = "测试邮件"
+    body = "这是一封测试邮件。"
+    try:
+        smtp(subject, body)
+        return {"message": "测试邮件已发送"}
+    except Exception as e:
+        return {"error": f"邮件发送失败: {str(e)}"}
+
+
 
 ## 监控相关
+# BA认证函数
+def basic_auth(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
+    correct_username = secrets.compare_digest(credentials.username, api_username)
+    correct_password = secrets.compare_digest(credentials.password, api_password)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="账号或密码不正确",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials
+
+
+# API状态页
+if api_status_enable:
+
+    @app.get("/api_status", dependencies=[Depends(basic_auth)])
+    async def api_status_page():
+        return FileResponse("static/api_status.html")
+
+
 # 初始化 request_data
 REQUEST_DATA = {
     pool_name: {
@@ -446,7 +526,6 @@ INTERFACE_HEALTH_DATA = {
     for item in pool["INTERFACE_POOL"]
 }
 
-
 # 清理 request_data 旧数据
 async def cleanup_old_stats():
     while True:
@@ -459,7 +538,6 @@ async def cleanup_old_stats():
             data["recent_requests"] = recent_count + data["recent_requests"] % 10
         await asyncio.sleep(60)
 
-
 # 更新 request_data 请求数据
 def update_request_stats(pool_name):
     now = datetime.now()
@@ -470,7 +548,6 @@ def update_request_stats(pool_name):
     if data["recent_requests"] % 10 == 0:
         data["recent_requests_timestamps"].append(now)
 
-
 # 当前总体健康情况
 @app.get("/api/status")
 async def health_status_number():
@@ -479,7 +556,6 @@ async def health_status_number():
         "request_status": request_status,
         "cookie_status": len(HEALTH_COOKIESTR_POOL),
     }
-
 
 # 返回各个 反代API池 的调用次数和总调用次数
 @app.get("/api/status/request")
@@ -506,7 +582,6 @@ async def request():
         pools_data.append(pool_stats)
     return {"pools_data": pools_data}
 
-
 # 查询各个 反代API 健康率
 @app.get("/api/status/api/health")
 async def api_health(request: Request):
@@ -521,7 +596,6 @@ async def api_health(request: Request):
         health_data.append({url: {"health_rate": health_rate, "total": data["total"]}})
     return {"health_data": health_data}
 
-
 # 查询各个 Cookie 健康情况
 @app.get("/api/status/cookie/health")
 async def cookie_health(request: Request):
@@ -530,7 +604,8 @@ async def cookie_health(request: Request):
     for user, cookie_data in ORIGINAL_COOKIESTR_POOL.items():
         try:
             user_health_status = any(
-                cookie_item["cookie"] in HEALTH_COOKIESTR_POOL for cookie_item in cookie_data
+                cookie_item["cookie"] in HEALTH_COOKIESTR_POOL
+                for cookie_item in cookie_data
             )
 
             health_info.append({"id": user, "healthy": user_health_status})
@@ -544,22 +619,25 @@ async def cookie_health(request: Request):
 
 
 ### 主线程启动
-# 启动时事件处理
+# 程序启动
 @app.on_event("startup")
 async def on_startup():
     async def start():
-        log_and_print("程序已启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
+        log_and_print("程序启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
         # 健康检查
         asyncio.create_task(start_health_check_coroutines())
         # 接口数据清理
         asyncio.create_task(cleanup_old_stats())
+        # 测试 SMTP 功能是否可用
+        await smtp_start_test()
 
     await start()
+
 
 # 程序关闭
 @app.on_event("shutdown")
 async def shutdown():
-    logger.info("程序关闭")
+    log_and_print("程序关闭", "INFO:     ", "INFO")
 
 
 if __name__ == "__main__":

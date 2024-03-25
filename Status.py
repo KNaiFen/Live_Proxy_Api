@@ -84,6 +84,17 @@ def query_health_status_number(url):
         print("当前健康Cookie数量：", cookie_status)
 
 
+# 增加测试邮件发送功能
+def send_test_email(url):
+    header = {"Authorization": SECRET_KEY}
+    result = requests.get(f"{url}/api/smtp/test", headers=header)
+
+    if result.status_code == 200:
+        print("测试邮件已发送")
+    else:
+        print("发送测试邮件失败")
+
+
 if __name__ == "__main__":
 
     def print_info():
@@ -91,6 +102,7 @@ if __name__ == "__main__":
         print(f"2: 查询各个 反代API 健康率")
         print(f"3: 查询各个 Cookie 健康情况")
         print(f"4: 查询当前总体健康情况")
+        print(f"5: 发送测试邮件")
         print(f"99: 退出")
 
     print_info()
@@ -106,6 +118,8 @@ if __name__ == "__main__":
             query_cookie_health_count(URL)
         elif INPUT == "4":
             query_health_status_number(URL)
+        elif INPUT == "5":
+            send_test_email(URL)
         elif INPUT == "99":
             print("退出")
             break
