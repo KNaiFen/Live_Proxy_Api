@@ -1,154 +1,165 @@
 <!DOCTYPE html>
 <html lang="zh">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>API 状态</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f4f4f4;
-            text-align: center;
-        }
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f4f4f4;
+        text-align: center;
+      }
 
-        .container {
-            width: 80%;
-            margin: 20px auto;
-            background: white;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
+      .container {
+        width: 80%;
+        margin: 20px auto;
+        background: white;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
 
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
 
-        th {
-            background-color: #f2f2f2;
-        }
+      th {
+        background-color: #f2f2f2;
+      }
 
-        button {
-            margin: 10px;
-            padding: 10px 20px;
-            font-size: 16px;
-        }
+      button {
+        margin: 10px;
+        padding: 10px 20px;
+        font-size: 16px;
+      }
 
-        #output {
-            margin-top: 20px;
-            text-align: left;
-        }
+      #output {
+        margin-top: 20px;
+        text-align: left;
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <div class="container">
-        <h1>API 状态</h1>
-        <div>
-            <label for="secretKey">密钥: </label>
-            <input type="password" id="secretKey" placeholder="输入密钥">
-            <button onclick="saveSecretKey()">确认</button>
-            <label><input type="checkbox" id="rememberMe"> 记住密钥</label>
-        </div>
-        <button onclick="queryRequestPoolsCount()">查询反代API池状态</button>
-        <button onclick="queryRequestHealthCount()">查询反代API健康率</button>
-        <button onclick="queryCookieHealthCount()">查询Cookie健康情况</button>
-        <button onclick="queryHealthStatusNumber()">查询当前总体健康情况</button>
+      <h1>API 状态</h1>
+      <div>
+        <label for="secretKey">密钥: </label>
+        <input type="password" id="secretKey" placeholder="输入密钥" />
+        <button onclick="saveSecretKey()">确认</button>
+        <label><input type="checkbox" id="rememberMe" /> 记住密钥</label>
+      </div>
+      <button onclick="queryRequestPoolsCount()">查询反代API池状态</button>
+      <button onclick="queryRequestHealthCount()">查询反代API健康率</button>
+      <button onclick="queryCookieHealthCount()">查询Cookie健康情况</button>
+      <button onclick="queryHealthStatusNumber()">查询当前总体健康情况</button>
+      <button onclick="sendTestEmail()">发送测试邮件</button>
 
-        <div id="output"></div>
+      <div id="output"></div>
     </div>
 
     <script>
-        const baseApiUrl = window.location.origin + '/api_status';
-        let secretKey = '';
+      const baseApiUrl = window.location.origin;
+      let secretKey = "";
 
-        window.onload = function () {
-            // 尝试从 cookie 中获取密钥
-            const savedKey = getCookie('secretKey');
-            if (savedKey) {
-                document.getElementById('secretKey').value = savedKey;
-                secretKey = savedKey;
-                document.getElementById('rememberMe').checked = true;
-            }
-        };
-
-        function saveSecretKey() {
-            secretKey = document.getElementById('secretKey').value;
-            const rememberMe = document.getElementById('rememberMe').checked;
-            if (rememberMe) {
-                setCookie('secretKey', secretKey, 30);
-            } else {
-                deleteCookie('secretKey');
-            }
+      window.onload = function () {
+        // 尝试从 cookie 中获取密钥
+        const savedKey = getCookie("secretKey");
+        if (savedKey) {
+          document.getElementById("secretKey").value = savedKey;
+          secretKey = savedKey;
+          document.getElementById("rememberMe").checked = true;
         }
+      };
 
-        function setCookie(name, value, days) {
-            const d = new Date();
-            d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-            let expires = "expires=" + d.toUTCString();
-            document.cookie = name + "=" + value + ";" + expires + ";path=/";
+      function saveSecretKey() {
+        secretKey = document.getElementById("secretKey").value;
+        const rememberMe = document.getElementById("rememberMe").checked;
+        if (rememberMe) {
+          setCookie("secretKey", secretKey, 30);
+        } else {
+          deleteCookie("secretKey");
         }
+      }
 
-        function getCookie(name) {
-            const nameEQ = name + "=";
-            const ca = document.cookie.split(';');
-            for (let i = 0; i < ca.length; i++) {
-                let c = ca[i];
-                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
-                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
-            }
-            return null;
-        }
+      function setCookie(name, value, days) {
+        const d = new Date();
+        d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+        let expires = "expires=" + d.toUTCString();
+        document.cookie = name + "=" + value + ";" + expires + ";path=/";
+      }
 
-        function deleteCookie(name) {
-            setCookie(name, "", -1);
+      function getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(";");
+        for (let i = 0; i < ca.length; i++) {
+          let c = ca[i];
+          while (c.charAt(0) == " ") c = c.substring(1, c.length);
+          if (c.indexOf(nameEQ) == 0)
+            return c.substring(nameEQ.length, c.length);
         }
+        return null;
+      }
 
-        async function queryRequestPoolsCount() {
-            const response = await fetch(`${baseApiUrl}/request_pools_count`);
-            const data = await response.json();
-            displayData(data, '反代API池状态');
-        }
+      function deleteCookie(name) {
+        setCookie(name, "", -1);
+      }
 
-        async function queryRequestHealthCount() {
-            const response = await fetch(`${baseApiUrl}/request_health_data`, {
-                headers: { 'Authorization': secretKey }
-            });
-            const data = await response.json();
-            displayData(data, '反代API健康率');
-        }
+      async function queryHealthStatusNumber() {
+        const response = await fetch(`${baseApiUrl}/api/status`);
+        const data = await response.json();
+        displayData(data, "当前总体健康情况");
+      }
 
-        async function queryCookieHealthCount() {
-            const response = await fetch(`${baseApiUrl}/cookie_health_data`, {
-                headers: { 'Authorization': secretKey }
-            });
-            const data = await response.json();
-            displayData(data, 'Cookie健康情况');
-        }
+      async function queryRequestPoolsCount() {
+        const response = await fetch(`${baseApiUrl}/api/status/request`);
+        const data = await response.json();
+        displayData(data, "反代API池状态");
+      }
 
-        async function queryHealthStatusNumber() {
-            const response = await fetch(`${baseApiUrl}/health_status_number`);
-            const data = await response.json();
-            displayData(data, '当前总体健康情况');
-        }
+      async function queryRequestHealthCount() {
+        const response = await fetch(`${baseApiUrl}/api/status/api/health`, {
+          headers: { Authorization: secretKey },
+        });
+        const data = await response.json();
+        displayData(data, "反代API健康率");
+      }
 
-        function displayData(data, title) {
-            let output = `<h2>${title}</h2>`;
-            output += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-            document.getElementById('output').innerHTML = output;
+      async function queryCookieHealthCount() {
+        const response = await fetch(`${baseApiUrl}/api/status/cookie/health`, {
+          headers: { Authorization: secretKey },
+        });
+        const data = await response.json();
+        displayData(data, "Cookie健康情况");
+      }
+
+      async function sendTestEmail() {
+        const response = await fetch(`${baseApiUrl}/api/smtp/test`, {
+          headers: { Authorization: secretKey },
+        });
+        const result = await response.json();
+        if (response.ok) {
+          alert(result.message);
+        } else {
+          alert(result.error);
         }
+      }
+
+      function displayData(data, title) {
+        let output = `<h2>${title}</h2>`;
+        output += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        document.getElementById("output").innerHTML = output;
+      }
     </script>
-
-</body>
-
+  </body>
 </html>
