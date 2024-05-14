@@ -135,7 +135,7 @@ logger = log()
 
 
 # 合并日志与打印信息
-def log_and_print(message, prefix="", level="INFO"):
+def log_print(message, prefix="", level="INFO"):
     if isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
     # 日志
@@ -172,7 +172,7 @@ def smtp(subject, body):
         logger.debug("[SMTP] 邮件发送成功")
         server.quit()
     except Exception as e:
-        log_and_print(f"[SMTP] 邮件发送失败: {e}", "ERROR:     ", "ERROR")
+        log_print(f"[SMTP] 邮件发送失败: {e}", "ERROR:     ", "ERROR")
 
 # SMTP 启动测试
 async def smtp_start_test():
@@ -183,11 +183,11 @@ async def smtp_start_test():
             else:
                 server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=5)
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            log_and_print("[SMTP] 邮件通知功能已启用", "INFO:     ", "INFO")
-            log_and_print("[SMTP] 邮箱登录成功", "INFO:     ", "INFO")
+            log_print("[SMTP] 邮件通知功能已启用", "INFO:     ", "INFO")
+            log_print("[SMTP] 邮箱登录成功", "INFO:     ", "INFO")
             server.quit()
         except Exception as e:
-            log_and_print(f"[SMTP] 邮箱登录失败: {e}", "ERROR:     ", "ERROR")
+            log_print(f"[SMTP] 邮箱登录失败: {e}", "ERROR:     ", "ERROR")
     else:
         logger.debug("[SMTP] 邮件通知功能禁用")
 
@@ -264,7 +264,7 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
             data = response.json()
             return data["code"] == 0, data, cookie_str, csrf
         except Exception as e:
-            log_and_print(
+            log_print(
                 f"[状态] 检查 Cookie 时出错: {e}' 无效了", "ERROR:     ", "ERROR"
             )
             return False, None, None, None
@@ -273,7 +273,7 @@ async def check_cookie_health_async(cookie: str, cookie_name: str) -> bool:
     if is_logged_in:
         return True
     else:
-        log_and_print(f"[状态] Cookie '{cookie_name}' 无效了", "WARN:     ", "WARNING")
+        log_print(f"[状态] Cookie '{cookie_name}' 无效了", "WARN:     ", "WARNING")
         smtp("[状态] Cookie失效警告", f"Cookie '{cookie_name}' 无效了，请及时处理。")
         await webhook({"message": f"[状态] Cookie '{cookie_name}' 无效了，请及时处理。"}, "ExpiryCookie")
         return False
@@ -319,7 +319,7 @@ async def interface_health_check_task():
                 if status["is_healthy"]
             ]
 
-        log_and_print(
+        log_print(
             "[状态] 当前健康 API 数: " + ", ".join(f"{pool}: {len(urls)}" for pool, urls in HEALTH_INTERFACE_POOLS.items()),
             "INFO:     ",
             "INFO",
@@ -343,7 +343,7 @@ async def cookie_health_check_task():
                     healthy_cookies.append(cookie_data["cookie"])
 
         HEALTH_COOKIESTR_POOL = healthy_cookies
-        log_and_print(
+        log_print(
             f"[状态] 当前健康 Cookie 数: {len(HEALTH_COOKIESTR_POOL)}",
             "INFO:     ",
             "INFO",
@@ -388,7 +388,7 @@ async def handle_proxy_request(
     ]
     target_url = weighted_choice(weighted_urls) if weighted_urls else None
     if not target_url:
-        log_and_print("[请求] 没有可用的健康API", "WARN:     ", "WARNING")
+        log_print("[请求] 没有可用的健康API", "WARN:     ", "WARNING")
         smtp("[请求] 没有可用的健康API", "没有可用的健康API，请及时处理。")
         await webhook({"message": f"[请求] 没有可用的健康API"}, "ExpiryAPI")
         raise HTTPException(status_code=400, detail="没有可用的健康API")
@@ -421,7 +421,7 @@ async def handle_proxy_request(
             headers["Cookie"] = chosen_cookie
         else:
             headers.pop("Cookie", None)
-            log_and_print(
+            log_print(
                 "[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING"
             )
             smtp("[请求] 没有Cookie", "没有配置 Cookie 或 Cookie 已过期")
@@ -620,13 +620,11 @@ async def cookie_health(request: Request):
 
     return health_info
 
-
-
 ### 主线程启动
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async def start():
-        log_and_print("程序启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
+        log_print("程序启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
         # 健康检查
         asyncio.create_task(start_health_check_coroutines())
         # API数据清理
@@ -636,7 +634,7 @@ async def lifespan(app: FastAPI):
 
     await start()
     yield
-    log_and_print("程序关闭", "INFO:     ", "INFO")
+    log_print("程序关闭", "INFO:     ", "INFO")
 
 app = FastAPI(lifespan=lifespan)
 
