@@ -28,12 +28,29 @@ from email.utils import formatdate
 root_dir = os.path.dirname(os.path.abspath(__file__))
 
 # 定义fastapi路由
-app = FastAPI()
+## 主线程启动
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async def start():
+        log_print("程序启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
+        # 健康检查
+        asyncio.create_task(start_health_check_coroutines())
+        # API数据清理
+        asyncio.create_task(cleanup_old_stats())
+        # 测试 SMTP 功能是否可用
+        await smtp_test()
+
+    await start()
+    yield
+    log_print("程序关闭", "INFO:     ", "INFO")
+
+app = FastAPI(lifespan=lifespan)
 
 # 静态文件目录
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-### 配置部分
+
+# 配置部分
 ## 读取配置文件
 config_file_path = os.path.join(root_dir, "config.yaml")
 with open(config_file_path, "r", encoding="utf-8") as file:
@@ -174,8 +191,8 @@ def smtp(subject, body):
     except Exception as e:
         log_print(f"[SMTP] 邮件发送失败: {e}", "ERROR:     ", "ERROR")
 
-# SMTP 启动测试
-async def smtp_start_test():
+# SMTP 测试
+async def smtp_test():
     if SMTP_ENABLE:
         try:
             if SMTP_SSL:
@@ -365,6 +382,8 @@ async def start_health_check_coroutines():
 async def handle_proxy_request(
     pool_name: str, path: str, request: Request, use_cookie: bool
 ) -> Response:
+       # 记录请求的 pool_name 和 path
+    logger.debug(f"处理请求 - pool_name: {pool_name}, path: {path}, use_cookie: {use_cookie}")
     def weighted_choice(choices):
         total = sum(weight for _, weight in choices)
         r = random.uniform(0, total)
@@ -375,7 +394,10 @@ async def handle_proxy_request(
             upto += weight
         assert False, "Oops!"
 
+    logger.debug(f"[请求] 处理代理请求: pool_name={pool_name}, path={path}, use_cookie={use_cookie}")
+
     if pool_name not in HEALTH_INTERFACE_POOLS:
+        logger.error(f"[错误] 不存在的代理池: {pool_name}")
         raise HTTPException(status_code=404, detail="不存在的代理池")
 
     update_request_stats(pool_name)
@@ -387,6 +409,7 @@ async def handle_proxy_request(
         if url["url"] in HEALTH_INTERFACE_POOLS[pool_name]
     ]
     target_url = weighted_choice(weighted_urls) if weighted_urls else None
+
     if not target_url:
         log_print("[请求] 没有可用的健康API", "WARN:     ", "WARNING")
         smtp("[请求] 没有可用的健康API", "没有可用的健康API，请及时处理。")
@@ -415,7 +438,7 @@ async def handle_proxy_request(
             if weighted_healthy_cookies
             else None
         )
-        logger.debug(f"[请求] 选择Cookie: {chosen_cookie}")
+        logger.debug(f"[请求] 选择的 Cookie: {chosen_cookie}")
         if chosen_cookie:
             headers.pop("Cookie", None)
             headers["Cookie"] = chosen_cookie
@@ -430,6 +453,8 @@ async def handle_proxy_request(
         headers.pop("Cookie", None)
 
     url = f"{target_url}/{path}"
+    logger.debug(f"[请求] 目标 URL: {url}")
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.request(
@@ -439,17 +464,21 @@ async def handle_proxy_request(
                 params=request.query_params,
                 content=await request.body(),
             )
+            logger.debug(f"[请求] 响应状态码: {response.status_code}")
             return Response(
                 content=response.content,
                 status_code=response.status_code,
                 headers=response.headers,
             )
     except httpx.HTTPError as http_err:
+        logger.error(f"[HTTP错误] 请求 URL: {url}, 错误信息: {str(http_err)}")
         raise HTTPException(
             status_code=http_err.response.status_code, detail=str(http_err)
         )
     except Exception as e:
+        logger.error(f"[错误] 请求 URL: {url}, 错误信息: {str(e)}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
+
 
 # 对请求返回的结果进行加工处理 (强制原画、优选cdn(未来可期))
 def liveStreamProcess(date_json):
@@ -464,6 +493,7 @@ async def api_live(pool_name: str, path: str, request: Request):
 @app.get("/no_cookie/{pool_name}/{path:path}")
 async def api_live_no_cookie(pool_name: str, path: str, request: Request):
     return await handle_proxy_request(pool_name, path, request, use_cookie=False)
+
 
 
 ### API相关
@@ -619,25 +649,6 @@ async def cookie_health(request: Request):
             logger.error(f"Problematic cookie: {user}")
 
     return health_info
-
-### 主线程启动
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async def start():
-        log_print("程序启动, 开始进行 API&Cookie 健康检查", "INFO:     ", "INFO")
-        # 健康检查
-        asyncio.create_task(start_health_check_coroutines())
-        # API数据清理
-        asyncio.create_task(cleanup_old_stats())
-        # 测试 SMTP 功能是否可用
-        await smtp_start_test()
-
-    await start()
-    yield
-    log_print("程序关闭", "INFO:     ", "INFO")
-
-app = FastAPI(lifespan=lifespan)
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host=HOST, port=PORT)
