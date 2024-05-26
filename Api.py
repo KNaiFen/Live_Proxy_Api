@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI, Request, HTTPException, Depends, status, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse
@@ -378,12 +379,11 @@ async def cookie_health_check_task():
 async def start_health_check_coroutines():
     await asyncio.gather(interface_health_check_task(), cookie_health_check_task())
 
+
 # 代理请求的通用函数
 async def handle_proxy_request(
     pool_name: str, path: str, request: Request, use_cookie: bool
 ) -> Response:
-       # 记录请求的 pool_name 和 path
-    logger.debug(f"处理请求 - pool_name: {pool_name}, path: {path}, use_cookie: {use_cookie}")
     def weighted_choice(choices):
         total = sum(weight for _, weight in choices)
         r = random.uniform(0, total)
@@ -417,14 +417,9 @@ async def handle_proxy_request(
         raise HTTPException(status_code=400, detail="没有可用的健康API")
 
     method = request.method
-    headers = {
-        k[5:].replace("_", "-").title(): v
-        for k, v in request.headers.items()
-        if k.startswith("HTTP_")
-    }
-    headers.pop("Host", None)
-    headers.pop("Accept-Encoding", None)
-    headers["User-Agent"] = USER_AGENT
+    headers = dict(request.headers)
+    headers.pop('host', None)
+    headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
 
     if use_cookie:
         weighted_healthy_cookies = [
@@ -440,10 +435,9 @@ async def handle_proxy_request(
         )
         logger.debug(f"[请求] 选择的 Cookie: {chosen_cookie}")
         if chosen_cookie:
-            headers.pop("Cookie", None)
             headers["Cookie"] = chosen_cookie
         else:
-            headers.pop("Cookie", None)
+            headers["Cookie"] = ""
             log_print(
                 "[请求] 没有配置 Cookie 或 Cookie 已过期", "WARN:     ", "WARNING"
             )
@@ -465,11 +459,6 @@ async def handle_proxy_request(
                 content=await request.body(),
             )
             logger.debug(f"[请求] 响应状态码: {response.status_code}")
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                headers=response.headers,
-            )
     except httpx.HTTPError as http_err:
         logger.error(f"[HTTP错误] 请求 URL: {url}, 错误信息: {str(http_err)}")
         raise HTTPException(
@@ -478,6 +467,14 @@ async def handle_proxy_request(
     except Exception as e:
         logger.error(f"[错误] 请求 URL: {url}, 错误信息: {str(e)}")
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
+
+    try:
+        data = json.loads(response.content.decode('utf-8', 'ignore'))
+    except json.JSONDecodeError:
+        logger.error("JSON解析错误")
+        raise HTTPException(status_code=500, detail="Invalid JSON response")
+
+    return liveStreamProcess(data)
 
 
 # 对请求返回的结果进行加工处理 (强制原画、优选cdn(未来可期))
