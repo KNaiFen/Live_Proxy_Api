@@ -24,6 +24,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.utils import formatdate
+import time
 
 # 根路径
 root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -255,16 +256,16 @@ async def check_interface_health_async(
     for _ in range(max_retries):
         try:
             INTERFACE_HEALTH_DATA[url]["total"] += 1
-            async with httpx.AsyncClient() as client:
-                response = await client.get(request_url, headers=headers, timeout=5)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(request_url, headers=headers)
             if response.status_code >= 200 and response.status_code < 300:
                 INTERFACE_HEALTH_DATA[url]["total_success"] += 1
                 return True
-        except httpx.HTTPError as http_err:
-            # logger.error(f"Error: check_interface_health_async: {url}")
+        except (httpx.ConnectTimeout, httpx.ReadTimeout):
             pass
-        except Exception as Error:
-            # logger.error(f"Error: {Error}")
+        except httpx.RequestError:
+            pass
+        except Exception:
             pass
         await asyncio.sleep(retry_interval)
 
@@ -384,6 +385,9 @@ async def start_health_check_coroutines():
 async def handle_proxy_request(
     pool_name: str, path: str, request: Request, use_cookie: bool
 ) -> Response:
+    # 记录请求开始时间
+    start_time = time.time()
+    
     def weighted_choice(choices):
         total = sum(weight for _, weight in choices)
         r = random.uniform(0, total)
@@ -449,24 +453,74 @@ async def handle_proxy_request(
     url = f"{target_url}/{path}"
     logger.debug(f"[请求] 目标 URL: {url}")
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method,
-                url,
-                headers=headers,
-                params=request.query_params,
-                content=await request.body(),
+    # 重试配置
+    max_retries = 2
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries + 1):
+        try:
+            # 连接超时10秒，读取超时30秒
+            timeout_config = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout_config) as client:
+                response = await client.request(
+                    method,
+                    url,
+                    headers=headers,
+                    params=request.query_params,
+                    content=await request.body(),
+                )
+                end_time = time.time()
+                response_time = round((end_time - start_time) * 1000, 2)
+                log_print(f"[响应时间] URL: {url}, 状态码: {response.status_code}, 耗时: {response_time}ms", "INFO:     ", "INFO")
+                break
+                
+        except (httpx.ConnectTimeout, httpx.ReadTimeout) as timeout_err:
+            error_type = "连接超时" if isinstance(timeout_err, httpx.ConnectTimeout) else "读取超时"
+            
+            if attempt < max_retries:
+                logger.warning(f"[重试] 第{attempt + 1}次尝试失败({error_type})，{retry_delay}秒后重试: {url}")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            else:
+                logger.error(f"[网络超时] 请求 URL: {url}, 错误类型: {error_type}")
+                raise HTTPException(
+                    status_code=HTTPStatus.GATEWAY_TIMEOUT, 
+                    detail=f"网络{error_type}，请稍后重试"
+                )
+                
+        except httpx.RequestError as req_err:
+            if attempt < max_retries:
+                logger.warning(f"[重试] 第{attempt + 1}次尝试失败(网络错误)，{retry_delay}秒后重试: {url}")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            else:
+                logger.error(f"[请求错误] 请求 URL: {url}, 错误信息: {str(req_err)}")
+                raise HTTPException(
+                    status_code=HTTPStatus.BAD_GATEWAY, 
+                    detail="网络连接失败，请检查网络连接或稍后重试"
+                )
+                
+        except httpx.HTTPStatusError as http_err:
+            logger.error(f"[HTTP状态错误] 请求 URL: {url}, 状态码: {http_err.response.status_code}")
+            if http_err.response.status_code == 404:
+                detail = "请求的资源不存在"
+            elif http_err.response.status_code == 403:
+                detail = "访问被拒绝，可能需要更新认证信息"
+            elif http_err.response.status_code >= 500:
+                detail = "上游服务暂时不可用，请稍后重试"
+            else:
+                detail = f"上游服务返回错误: {http_err.response.status_code}"
+            
+            raise HTTPException(
+                status_code=http_err.response.status_code, 
+                detail=detail
             )
-            logger.debug(f"[请求] 响应状态码: {response.status_code}")
-    except httpx.HTTPError as http_err:
-        logger.error(f"[HTTP错误] 请求 URL: {url}, 错误信息: {str(http_err)}")
-        raise HTTPException(
-            status_code=http_err.response.status_code, detail=str(http_err)
-        )
-    except Exception as e:
-        logger.error(f"[错误] 请求 URL: {url}, 错误信息: {str(e)}")
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e))
+            
+        except Exception as e:
+            logger.error(f"[未知错误] 请求 URL: {url}, 错误信息: {str(e)}")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="服务内部错误，请联系管理员")
 
     try:
         data = json.loads(response.content.decode('utf-8', 'ignore'))
